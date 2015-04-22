@@ -31,9 +31,12 @@ init(const Mesh &mesh) {
         parcel->x(timeIdx) = x;
         parcel->meshIdx(timeIdx).locate(mesh, x);
         vec sizes(mesh.domain().numDim());
-        sizes[0] = pow(mesh.cellVolume(i), mesh.domain().numDim());
-        sizes[1] = pow(mesh.cellVolume(i), mesh.domain().numDim());
-        sizes[2] = pow(mesh.cellVolume(i), mesh.domain().numDim());
+#if defined LASM_IN_CARTESIAN
+        int I[3]; mesh.unwrapIndex(CENTER, i, I);
+        sizes[0] = mesh.gridInterval(0, HALF, I[0]-1);
+        sizes[1] = mesh.gridInterval(1, HALF, I[1]-1);
+        sizes[2] = mesh.gridInterval(2, HALF, I[2]);
+#endif
         parcel->skeletonPoints().init(mesh, sizes);
         parcel->updateDeformMatrix(timeIdx);
         parcel->quadraturePoints().updateSpaceCoords(timeIdx);

@@ -42,6 +42,11 @@ public:
 
     virtual void
     output(const TimeLevelIndex<2> &timeIdx, int ncId);
+
+    virtual double
+    density(const TimeLevelIndex<2> &timeIdx, int tracerIdx, int cellIdx) const {
+        return meshAdaptor.mass(timeIdx, tracerIdx, cellIdx)/meshAdaptor.volume(cellIdx);
+    }
 protected:
     void
     integrate(double dt, const TimeLevelIndex<2> &newIdx,

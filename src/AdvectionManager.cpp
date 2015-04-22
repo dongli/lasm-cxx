@@ -168,6 +168,7 @@ integrate(double dt, const TimeLevelIndex<2> &newIdx, const VelocityField &veloc
 
 void AdvectionManager::
 connectParcelAndGrids(const TimeLevelIndex<2> &timeIdx, Parcel *parcel) {
+    parcel->updateShapeSize(timeIdx);
     Searcher a(cellTree, NULL, cellCoords,
                parcel->x(timeIdx).cartCoord(), true);
     double longAxisSize = parcel->shapeSize(timeIdx).max();
@@ -378,7 +379,7 @@ remapFromGridsToParcels(const TimeLevelIndex<2> &timeIdx) {
             Parcel *parcel = meshAdaptor.connectedParcels(i)[j];
             double weight = meshAdaptor.remapWeight(i, parcel)/totalWeight;
             for (int t = 0; t < Tracers::numTracer(); ++t) {
-                parcel->tracers().mass(timeIdx, t) += meshAdaptor.mass(timeIdx, i, t)*weight;
+                parcel->tracers().mass(timeIdx, t) += meshAdaptor.mass(timeIdx, t, i)*weight;
             }
         }
     }

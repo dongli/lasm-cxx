@@ -36,8 +36,8 @@ public:
     }
 
     double&
-    mass(const TimeLevelIndex<2> &timeIdx, int speciesIdx, int cellIdx) {
-        return (*_masses[speciesIdx])(timeIdx, cellIdx);
+    mass(const TimeLevelIndex<2> &timeIdx, int tracerIdx, int cellIdx) const {
+        return (*_masses[tracerIdx])(timeIdx, cellIdx);
     }
 
     void
@@ -75,11 +75,12 @@ public:
         return _numContainedParcel[cellIdx];
     }
 
-    const vector<Parcel*>& containedParcels(int cellIdx) const {
+    const vector<Parcel*>&
+    containedParcels(int cellIdx) const {
         return _containedParcels[cellIdx];
     }
-};
+}; // MeshAdaptor
 
-}
+} // lasm
 
 #endif // __LASM_MeshAdaptor__

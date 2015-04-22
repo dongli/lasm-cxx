@@ -9,4 +9,7 @@
 #include "Tracers.h"
 #include "AdvectionManager.h"
 
+// TODO: Move this class to GEOMTK.
+#include "Cartesian3DTest.h"
+
 #endif

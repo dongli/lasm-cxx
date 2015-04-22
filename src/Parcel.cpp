@@ -53,6 +53,7 @@ updateDeformMatrix(const TimeLevelIndex<2> &timeIdx) {
     mat &H = _H.level(timeIdx);
     const field<BodyCoord> &y = SkeletonPoints::bodyCoords();
     const field<SpaceCoord> &x = _skeletonPoints->localSpaceCoords(timeIdx);
+    const field<MeshIndex> &meshIdxs = _skeletonPoints->meshIdxs(timeIdx);
     if (domain->numDim() == 2) {
         // Calculate the elements of four matrices.
         double h11_1 = x[0](0)/y[0](0); double h21_1 = x[0](1)/y[0](0);
@@ -64,16 +65,32 @@ updateDeformMatrix(const TimeLevelIndex<2> &timeIdx) {
         H(1, 0) = (h21_1+h21_3)*0.5; H(1, 1) = (h22_2+h22_4)*0.5;
     } else if (domain->numDim() == 3) {
         // Calculate the elements of six matrices.
-        double h11_1 = x[0](0)/y[0](0); double h21_1 = x[0](1)/y[0](0); double h31_1 = x[0](2)/y[0](0);
-        double h12_2 = x[1](0)/y[1](1); double h22_2 = x[1](1)/y[1](1); double h32_2 = x[1](2)/y[1](1);
-        double h11_3 = x[2](0)/y[2](0); double h21_3 = x[2](1)/y[2](0); double h31_3 = x[2](2)/y[2](0);
-        double h12_4 = x[3](0)/y[3](1); double h22_4 = x[3](1)/y[3](1); double h32_4 = x[3](2)/y[3](1);
-        double h13_5 = x[4](0)/y[4](2); double h23_5 = x[4](1)/y[4](2); double h33_5 = x[4](2)/y[4](2);
-        double h13_6 = x[5](0)/y[5](2); double h23_6 = x[5](1)/y[5](2); double h33_6 = x[5](2)/y[5](2);
+        double h11_1 = 0, h11_3 = 0, h12_2 = 0, h12_4 = 0, h13_5 = 0, h13_6 = 0;
+        double h21_1 = 0, h21_3 = 0, h22_2 = 0, h22_4 = 0, h23_5 = 0, h23_6 = 0;
+        double h31_1 = 0, h31_3 = 0, h32_2 = 0, h32_4 = 0, h33_5 = 0, h33_6 = 0;
+        double w1 = 0, w2 = 0, w3 = 0, w4 = 0, w5 = 0, w6 = 0;
+        if (meshIdxs[0].isValid()) {
+            w1 = 1; h11_1 = x[0](0)/y[0](0); h21_1 = x[0](1)/y[0](0); h31_1 = x[0](2)/y[0](0);
+        }
+        if (meshIdxs[1].isValid()) {
+            w2 = 1; h12_2 = x[1](0)/y[1](1); h22_2 = x[1](1)/y[1](1); h32_2 = x[1](2)/y[1](1);
+        }
+        if (meshIdxs[2].isValid()) {
+            w3 = 1; h11_3 = x[2](0)/y[2](0); h21_3 = x[2](1)/y[2](0); h31_3 = x[2](2)/y[2](0);
+        }
+        if (meshIdxs[3].isValid()) {
+            w4 = 1; h12_4 = x[3](0)/y[3](1); h22_4 = x[3](1)/y[3](1); h32_4 = x[3](2)/y[3](1);
+        }
+        if (meshIdxs[4].isValid()) {
+            w5 = 1; h13_5 = x[4](0)/y[4](2); h23_5 = x[4](1)/y[4](2); h33_5 = x[4](2)/y[4](2);
+        }
+        if (meshIdxs[5].isValid()) {
+            w6 = 1; h13_6 = x[5](0)/y[5](2); h23_6 = x[5](1)/y[5](2); h33_6 = x[5](2)/y[5](2);
+        }
         // The final matrix is the combination of the six.
-        H(0, 0) = (h11_1+h11_3)*0.5; H(0, 1) = (h12_2+h12_4)*0.5; H(0, 2) = (h13_5+h13_6)*0.5;
-        H(1, 0) = (h21_1+h21_3)*0.5; H(1, 1) = (h22_2+h22_4)*0.5; H(1, 2) = (h23_5+h23_6)*0.5;
-        H(2, 0) = (h31_1+h31_3)*0.5; H(2, 1) = (h32_2+h32_4)*0.5; H(2, 2) = (h33_5+h33_6)*0.5;    
+        H(0, 0) = (w1*h11_1+w3*h11_3)/(w1+w3); H(0, 1) = (w2*h12_2+w4*h12_4)/(w2+w4); H(0, 2) = (w5*h13_5+w6*h13_6)/(w5+w6);
+        H(1, 0) = (w1*h21_1+w3*h21_3)/(w1+w3); H(1, 1) = (w2*h22_2+w4*h22_4)/(w2+w4); H(1, 2) = (w5*h23_5+w6*h23_6)/(w5+w6);
+        H(2, 0) = (w1*h31_1+w3*h31_3)/(w1+w3); H(2, 1) = (w2*h32_2+w4*h32_4)/(w2+w4); H(2, 2) = (w5*h33_5+w6*h33_6)/(w5+w6);
     }
     if (!svd(_U, _S, _V, H)) {
         REPORT_ERROR("Failed to do SVD on a matrix!");
@@ -135,7 +152,7 @@ void Parcel::
 calcSpaceCoord(const TimeLevelIndex<2> &timeIdx,
                const BodyCoord &y, SpaceCoord &x) const {
     x() = this->x(timeIdx)()+H(timeIdx)*y();
-    domain->constrain(x);
+    domain->isValid(x);
 } // calcSpaceCoord
 
 void Parcel::

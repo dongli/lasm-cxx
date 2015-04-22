@@ -71,11 +71,14 @@ init(const Mesh &mesh, const vec &sizes) {
     }
 #endif
     for (int i = 0; i < _meshIdx.level(timeIdx).size(); ++i) {
-        domain->constrain(x.level(timeIdx)[i]);
+        if (domain->isValid(x.level(timeIdx)[i])) {
 #if defined LASM_IN_CARTESIAN
-        xl.level(timeIdx)[i]() = domain->diffCoord(x.level(timeIdx)[i], hostParcel->x(timeIdx));
+            xl.level(timeIdx)[i]() = domain->diffCoord(x.level(timeIdx)[i], hostParcel->x(timeIdx));
 #endif
-        _meshIdx.level(timeIdx)[i].locate(mesh, x.level(timeIdx)[i]);
+            _meshIdx.level(timeIdx)[i].locate(mesh, x.level(timeIdx)[i]);
+        } else {
+            _meshIdx.level(timeIdx)[i].reset();
+        }
     }
 }
 

@@ -39,7 +39,13 @@ add_executable (test_lasm
     "${PROJECT_SOURCE_DIR}/src/test/test.cpp"
 )
 target_link_libraries (test_lasm
-    ${NETCDF_LIBRARIES}
     gtest gtest_main
-    lasm mlpack
+    lasm mlpack geomtk
+)
+
+add_executable (run_test_cases
+    "${PROJECT_SOURCE_DIR}/src/test/run_test_cases.cpp"
+)
+target_link_libraries (run_test_cases
+    lasm
 )

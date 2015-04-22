@@ -3,10 +3,11 @@
 
 #include "lasm_commons.h"
 
-namespace lasm {
+// TODO: Move this class to GEOMTK.
 
 class Cartesian3DTest
-: public geomtk::AdvectionTestInterface<2, Domain, Mesh, IOManager, VelocityField> {
+: public geomtk::AdvectionTestInterface<2, Domain, Mesh, Field<double>, VelocityField, IOManager> {
+    int dataIdx;
 public:
     typedef geomtk::AdvectionManagerInterface<2, Domain, Mesh, VelocityField> AdvectionManager;
 
@@ -14,7 +15,7 @@ public:
     virtual ~Cartesian3DTest();
 
     virtual void
-    init(const ConfigManager &configManager, TimeManager &timeManager);
+    init(const ConfigManager &configManager, AdvectionManager &advectionManager);
 
     virtual void
     setInitialCondition(AdvectionManager &advectionManager);
@@ -25,8 +26,6 @@ public:
     virtual void
     output(const TimeLevelIndex<2> &timeIdx,
            AdvectionManager &advectionManager);
-};
-
-}
+}; // Cartesian3DTest
 
 #endif // __LASM_Cartesian3DTest__
