@@ -36,7 +36,7 @@ init(int ID) {
         _detH.level(l) = -999.0;
         _invH.level(l).set_size(domain->numDim(), domain->numDim());
         _shapeSize.level(l).set_size(domain->numDim());
-        _meshIdx.level(l).setNumDim(domain->numDim());
+        _meshIndex.level(l).init(domain->numDim());
     }
     _U.set_size(domain->numDim(), domain->numDim());
     _V.set_size(domain->numDim(), domain->numDim());
@@ -53,7 +53,7 @@ updateDeformMatrix(const TimeLevelIndex<2> &timeIdx) {
     mat &H = _H.level(timeIdx);
     const field<BodyCoord> &y = SkeletonPoints::bodyCoords();
     const field<SpaceCoord> &x = _skeletonPoints->localSpaceCoords(timeIdx);
-    const field<MeshIndex> &meshIdxs = _skeletonPoints->meshIdxs(timeIdx);
+    const field<MeshIndex> &meshIndexs = _skeletonPoints->meshIndexs(timeIdx);
     if (domain->numDim() == 2) {
         // Calculate the elements of four matrices.
         double h11_1 = x[0](0)/y[0](0); double h21_1 = x[0](1)/y[0](0);
@@ -69,22 +69,22 @@ updateDeformMatrix(const TimeLevelIndex<2> &timeIdx) {
         double h21_1 = 0, h21_3 = 0, h22_2 = 0, h22_4 = 0, h23_5 = 0, h23_6 = 0;
         double h31_1 = 0, h31_3 = 0, h32_2 = 0, h32_4 = 0, h33_5 = 0, h33_6 = 0;
         double w1 = 0, w2 = 0, w3 = 0, w4 = 0, w5 = 0, w6 = 0;
-        if (meshIdxs[0].isValid()) {
+        if (meshIndexs[0].isValid()) {
             w1 = 1; h11_1 = x[0](0)/y[0](0); h21_1 = x[0](1)/y[0](0); h31_1 = x[0](2)/y[0](0);
         }
-        if (meshIdxs[1].isValid()) {
+        if (meshIndexs[1].isValid()) {
             w2 = 1; h12_2 = x[1](0)/y[1](1); h22_2 = x[1](1)/y[1](1); h32_2 = x[1](2)/y[1](1);
         }
-        if (meshIdxs[2].isValid()) {
+        if (meshIndexs[2].isValid()) {
             w3 = 1; h11_3 = x[2](0)/y[2](0); h21_3 = x[2](1)/y[2](0); h31_3 = x[2](2)/y[2](0);
         }
-        if (meshIdxs[3].isValid()) {
+        if (meshIndexs[3].isValid()) {
             w4 = 1; h12_4 = x[3](0)/y[3](1); h22_4 = x[3](1)/y[3](1); h32_4 = x[3](2)/y[3](1);
         }
-        if (meshIdxs[4].isValid()) {
+        if (meshIndexs[4].isValid()) {
             w5 = 1; h13_5 = x[4](0)/y[4](2); h23_5 = x[4](1)/y[4](2); h33_5 = x[4](2)/y[4](2);
         }
-        if (meshIdxs[5].isValid()) {
+        if (meshIndexs[5].isValid()) {
             w6 = 1; h13_6 = x[5](0)/y[5](2); h23_6 = x[5](1)/y[5](2); h33_6 = x[5](2)/y[5](2);
         }
         // The final matrix is the combination of the six.
@@ -118,30 +118,30 @@ updateDeformMatrix(const TimeLevelIndex<2> &timeIdx, const vec &S) {
     longAxisVertexY() = _invH.level(timeIdx)*_H.level(timeIdx)*_V.col(0);
     calcSpaceCoord(timeIdx, longAxisVertexY, longAxisVertexX);
     _filamentDegree.level(timeIdx) = _S[0]/_S.min();
-}
+} // updateDeformMatrix
 
 void Parcel::
 resetSkeletonPoints(const TimeLevelIndex<2> &timeIdx, const Mesh &mesh) {
     const field<BodyCoord> &y = SkeletonPoints::bodyCoords();
     field<SpaceCoord> &x = _skeletonPoints->spaceCoords(timeIdx);
-    field<MeshIndex> &meshIdxs = _skeletonPoints->meshIdxs(timeIdx);
-    for (int i = 0; i < x.size(); ++i) {
+    field<MeshIndex> &meshIndexs = _skeletonPoints->meshIndexs(timeIdx);
+    for (uword i = 0; i < x.size(); ++i) {
         calcSpaceCoord(timeIdx, y[i], x[i]);
-        meshIdxs[i].reset();
-        meshIdxs[i].locate(mesh, x[i]);
+        meshIndexs[i].reset();
+        meshIndexs[i].locate(mesh, x[i]);
     }
 } // resetSkeletonPoints
 
 void Parcel::
 updateVolume(const TimeLevelIndex<2> &timeIdx, double volume) {
     _detH.level(timeIdx) = volume;
-}
+} // updateVolume
 
 void Parcel::
 updateShapeSize(const TimeLevelIndex<2> &timeIdx) {
     BodyCoord y(domain->numDim());
     SpaceCoord x(domain->numDim());
-    for (int m = 0; m < domain->numDim(); ++m) {
+    for (uword m = 0; m < domain->numDim(); ++m) {
         y() = _invH.level(timeIdx)*_H.level(timeIdx)*_V.col(m);
         calcSpaceCoord(timeIdx, y, x);
         _shapeSize.level(timeIdx)[m] = domain->calcDistance(x, _x.level(timeIdx));
@@ -171,10 +171,15 @@ shapeFunction(const TimeLevelIndex<2> &timeIdx,
 
 void Parcel::
 connectCell(int cellIdx) {
-    if (_numConnectedCell == _connectedCellIdxs.size()) {
-        _connectedCellIdxs.push_back(cellIdx);
+    for (uword i = 0; i < _numConnectedCell; ++i) {
+        if (_connectedCellIndexs[i] == cellIdx) {
+            return;
+        }
+    }
+    if (_numConnectedCell == _connectedCellIndexs.size()) {
+        _connectedCellIndexs.push_back(cellIdx);
     } else {
-        _connectedCellIdxs[_numConnectedCell] = cellIdx;
+        _connectedCellIndexs[_numConnectedCell] = cellIdx;
     }
     _numConnectedCell++;
 } // connectCell

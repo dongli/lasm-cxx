@@ -7,9 +7,10 @@
 
 class Cartesian3DTest
 : public geomtk::AdvectionTestInterface<2, Domain, Mesh, Field<double>, VelocityField, IOManager> {
-    int dataIdx;
+    arma::uword dataIdx;
 public:
     typedef geomtk::AdvectionManagerInterface<2, Domain, Mesh, VelocityField> AdvectionManager;
+    typedef geomtk::AdvectionTestInterface<2, Domain, Mesh, Field<double>, VelocityField, IOManager> Interface;
 
     Cartesian3DTest();
     virtual ~Cartesian3DTest();
@@ -21,7 +22,8 @@ public:
     setInitialCondition(AdvectionManager &advectionManager);
 
     virtual void
-    advanceDynamics(AdvectionManager &advectionManager);
+    advanceDynamics(const TimeLevelIndex<2> &timeIdx,
+                    AdvectionManager &advectionManager);
 
     virtual void
     output(const TimeLevelIndex<2> &timeIdx,

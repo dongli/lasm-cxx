@@ -24,18 +24,20 @@ void ParcelManager::
 init(const Mesh &mesh) {
     this->mesh = &mesh;
     TimeLevelIndex<2> timeIdx;
-    for (int i = 0; i < mesh.totalNumGrid(CENTER, mesh.domain().numDim()); ++i) {
+    for (uword i = 0; i < mesh.totalNumGrid(CENTER, mesh.domain().numDim()); ++i) {
         const SpaceCoord &x = mesh.gridCoord(CENTER, i);
         Parcel *parcel = new Parcel;
         parcel->init(i);
         parcel->x(timeIdx) = x;
-        parcel->meshIdx(timeIdx).locate(mesh, x);
+        parcel->meshIndex(timeIdx).locate(mesh, x);
         vec sizes(mesh.domain().numDim());
 #if defined LASM_IN_CARTESIAN
-        int I[3]; mesh.unwrapIndex(CENTER, i, I);
-        sizes[0] = mesh.gridInterval(0, HALF, I[0]-1);
-        sizes[1] = mesh.gridInterval(1, HALF, I[1]-1);
-        sizes[2] = mesh.gridInterval(2, HALF, I[2]);
+        // TODO: Find a better way to specify grid sizes.
+        int I, J, K;
+        mesh.unwrapIndex(CENTER, i, I, J, K);
+        sizes[0] = mesh.gridInterval(0, HALF, I-1);
+        sizes[1] = mesh.gridInterval(1, HALF, J-1);
+        sizes[2] = mesh.gridInterval(2, HALF, K);
 #endif
         parcel->skeletonPoints().init(mesh, sizes);
         parcel->updateDeformMatrix(timeIdx);
@@ -116,7 +118,7 @@ output(const TimeLevelIndex<2> &timeIdx, int ncId) {
     doubleData = new double[_parcels.size()*mesh->domain().numDim()];
     l = 0;
     for (auto parcel : _parcels) {
-        for (int m = 0; m < mesh->domain().numDim(); ++m) {
+        for (uword m = 0; m < mesh->domain().numDim(); ++m) {
             doubleData[l++] = parcel->x(timeIdx)(m);
         }
     }
@@ -137,7 +139,7 @@ output(const TimeLevelIndex<2> &timeIdx, int ncId) {
     l = 0;
     for (auto parcel : _parcels) {
         for (auto xs : parcel->skeletonPoints().spaceCoords(timeIdx)) {
-            for (int m = 0; m < mesh->domain().numDim(); ++m) {
+            for (uword m = 0; m < mesh->domain().numDim(); ++m) {
                 doubleData[l++] = xs(m);
             }
         }
@@ -157,7 +159,7 @@ output(const TimeLevelIndex<2> &timeIdx, int ncId) {
                 y(0) = cos(theta);
                 y(1) = sin(theta);
                 parcel->calcSpaceCoord(timeIdx, y, x);
-                for (int m = 0; m < mesh->domain().numDim(); ++m) {
+                for (uword m = 0; m < mesh->domain().numDim(); ++m) {
                     doubleData[l++] = x(m);
                 }
             }

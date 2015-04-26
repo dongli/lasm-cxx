@@ -13,16 +13,14 @@ namespace lasm {
 
 using arma::vec;
 using arma::mat;
+using arma::uword;
 using arma::field;
 using std::list;
 using std::vector;
 using std::string;
-
-// Shortcuts for MLPACK classes.
-typedef mlpack::range::RangeSearchStat SearchStat;
-typedef mlpack::tree::BinarySpaceTree<mlpack::bound::HRectBound<2>, SearchStat> Tree;
-typedef mlpack::metric::EuclideanDistance Metric;
-typedef mlpack::range::RangeSearch<Metric, Tree> Searcher;
+using std::cout;
+using std::endl;
+using std::setw;
 
 using geomtk::BILINEAR;
 

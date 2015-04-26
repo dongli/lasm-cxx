@@ -7,8 +7,6 @@ Cartesian3DTest() {
 
 Cartesian3DTest::
 ~Cartesian3DTest() {
-    delete _mesh;
-    delete _domain;
 }
 
 void Cartesian3DTest::
@@ -33,7 +31,9 @@ init(const ConfigManager &configManager, AdvectionManager &advectionManager) {
     // Initialize velocity field.
     velocityField.create(*_mesh, true, true);
     io.file(dataIdx).addField("double", FULL_DIMENSION,
-                              {&velocityField(0), &velocityField(1)});
+                              {&velocityField(0),
+                               &velocityField(1),
+                               &velocityField(2)});
     // Initialize advection manager.
     advectionManager.init(configManager, *_mesh);
     // Initialize density fields for input and output.
@@ -54,33 +54,42 @@ init(const ConfigManager &configManager, AdvectionManager &advectionManager) {
 
 void Cartesian3DTest::
 setInitialCondition(AdvectionManager &advectionManager) {
+    TimeLevelIndex<2> timeIdx;
     io.open(dataIdx);
+    io.input<double>(dataIdx, timeIdx, {&velocityField(0),
+                                        &velocityField(1),
+                                        &velocityField(2)});
     double *q = new double[_mesh->totalNumGrid(CENTER)*densities.size()];
-    int j = 0;\
-    for (int t = 0; t < densities.size(); ++t) {
+    int j = 0;
+    for (arma::uword t = 0; t < densities.size(); ++t) {
         io.input<double>(dataIdx, {&densities[t]});
-        for (int i = 0; i < _mesh->totalNumGrid(CENTER); ++i) {
+        for (arma::uword i = 0; i < _mesh->totalNumGrid(CENTER); ++i) {
             q[j++] = densities[t](i);
         }
     }
-    TimeLevelIndex<2> timeIdx;
     advectionManager.input(timeIdx, q);
+    io.close(dataIdx);
 } // setInitialCondition
 
 void Cartesian3DTest::
-advanceDynamics(AdvectionManager &advectionManager) {
-    // Read in WRF-LES 3D flow.
+advanceDynamics(const TimeLevelIndex<2> &timeIdx,
+                AdvectionManager &advectionManager) {
+    io.open(dataIdx);
+    io.input<double>(dataIdx, timeIdx, {&velocityField(0),
+                                        &velocityField(1),
+                                        &velocityField(2)});
+    io.close(dataIdx);
+    Interface::advanceDynamics(timeIdx, advectionManager);
 } // advanceDynamics
 
 void Cartesian3DTest::
 output(const TimeLevelIndex<2> &timeIdx, AdvectionManager &advectionManager) {
     io.create(outputIdx);
-    for (int t = 0; t < densities.size(); ++t) {
-        for (int i = 0; i < _mesh->totalNumGrid(CENTER); ++i) {
-            std::cout << advectionManager.density(timeIdx, t, i) << std::endl;
+    for (arma::uword t = 0; t < densities.size(); ++t) {
+        for (arma::uword i = 0; i < _mesh->totalNumGrid(CENTER); ++i) {
             densities[t](i) = advectionManager.density(timeIdx, t, i);
         }
-        io.output<double>(outputIdx, timeIdx, {&densities[t]});
+        io.output<double>(outputIdx, {&densities[t]});
     }
     io.close(outputIdx);
 } // output

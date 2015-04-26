@@ -8,10 +8,11 @@ namespace lasm {
 class MeshAdaptor {
     const Mesh *mesh;
     vector<Field<double, 2>*> _masses;
-    vector<int> _numConnectedParcel;
+    vector<uword> _numConnectedParcel;
     vector<vector<Parcel*> > _connectedParcels;
+    vector<vector<uword> > _numContainedQuadraturePoint;
     vector<vector<double> > _remapWeights;
-    vector<int> _numContainedParcel;
+    vector<uword> _numContainedParcel;
     vector<vector<Parcel*> > _containedParcels;
 public:
     MeshAdaptor();
@@ -52,10 +53,16 @@ public:
     void
     resetConnectedParcels();
 
+    uword
+    numContainedQuadraturePoint(int cellIdx, Parcel *parcel) const;
+
     double
     remapWeight(int cellIdx, Parcel *parcel) const;
 
-    int
+    double&
+    remapWeight(int cellIdx, Parcel *parcel);
+
+    uword
     numConnectedParcel(int cellIdx) const {
         return _numConnectedParcel[cellIdx];
     }
@@ -70,7 +77,7 @@ public:
     void
     resetContainedParcels();
 
-    int
+    uword
     numContainedParcel(int cellIdx) const {
         return _numContainedParcel[cellIdx];
     }

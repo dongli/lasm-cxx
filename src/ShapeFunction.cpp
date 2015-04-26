@@ -26,7 +26,7 @@ void ShapeFunction::init(const Domain &domain_) {
 
 void ShapeFunction::evalFunc(const BodyCoord &y, double &f) {
     f = 1.0;
-    for (int i = 0; i < domain->numDim(); ++i) {
+    for (uword i = 0; i < domain->numDim(); ++i) {
         if (-1.0 <= y(i) && y(i) <= -0.5) {
             f *= 2.0*pow(1.0+y(i), 3.0);
         } else if (-0.5 <= y(i) && y(i) <= 0.0) {
@@ -48,8 +48,8 @@ void ShapeFunction::evalDerv(const BodyCoord& y, vec &d) {
     assert(d.size() == domain->numDim());
 #endif
     d.ones();
-    for (int i = 0; i < domain->numDim(); ++i) {
-        for (int j = 0; j < domain->numDim(); ++j) {
+    for (uword i = 0; i < domain->numDim(); ++i) {
+        for (uword j = 0; j < domain->numDim(); ++j) {
             if (i == j) {
                 if (-1.0 <= y(j) && y(j) <= -0.5) {
                     d(i) *= 6.0*pow(1.0+y(j), 2.0);

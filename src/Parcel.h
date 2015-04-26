@@ -26,10 +26,10 @@ protected:
     SkeletonPoints *_skeletonPoints;
     Tracers *_tracers;
 
-    int _hostCellIdx;
-    TimeLevels<MeshIndex, 2> _meshIdx;
-    int _numConnectedCell;
-    vector<int> _connectedCellIdxs;
+    int _hostCellIndex;
+    TimeLevels<MeshIndex, 2> _meshIndex;
+    uword _numConnectedCell;
+    vector<int> _connectedCellIndexs;
 public:
     Parcel();
     virtual ~Parcel();
@@ -120,13 +120,13 @@ public:
     }
 
     int&
-    hostCellIdx() {
-        return _hostCellIdx;
+    hostCellIndex() {
+        return _hostCellIndex;
     }
 
     MeshIndex&
-    meshIdx(const TimeLevelIndex<2> &timeIdx) {
-        return _meshIdx.level(timeIdx);
+    meshIndex(const TimeLevelIndex<2> &timeIdx) {
+        return _meshIndex.level(timeIdx);
     }
 
     static void
@@ -170,11 +170,11 @@ public:
     resetConnectedCells();
 
     const vector<int>&
-    connectedCellIdxs() const {
-        return _connectedCellIdxs;
+    connectedCellIndexs() const {
+        return _connectedCellIndexs;
     }
 
-    int
+    uword
     numConnectedCell() const {
         return _numConnectedCell;
     }

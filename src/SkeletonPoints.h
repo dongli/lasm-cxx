@@ -13,7 +13,7 @@ private:
     static field<BodyCoord> y;
     const Parcel *hostParcel;
     TimeLevels<field<SpaceCoord>, 2> x, xl;
-    TimeLevels<field<MeshIndex>, 2> _meshIdx;
+    TimeLevels<field<MeshIndex>, 2> I;
 public:
     SkeletonPoints(const Parcel *hostParcel);
     virtual ~SkeletonPoints();
@@ -40,8 +40,8 @@ public:
     }
 
     field<MeshIndex>&
-    meshIdxs(const TimeLevelIndex<2> &timeIdx) {
-        return _meshIdx.level(timeIdx);
+    meshIndexs(const TimeLevelIndex<2> &timeIdx) {
+        return I.level(timeIdx);
     }
 
     const SpaceCoord&

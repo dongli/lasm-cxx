@@ -19,10 +19,6 @@ class AdvectionManager
     double radialMixing;    // control the radial mixing degree
     double lateralMixing;   // control the lateral mixing degree
     double restoreFactor;   // control the base density restore degree
-
-    Tree *cellTree;
-    mat cellCoords;
-    vector<size_t> cellCoordsMap;
 public:
     AdvectionManager();
     virtual ~AdvectionManager();

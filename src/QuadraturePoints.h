@@ -21,6 +21,11 @@ public:
     static void
     init(const Domain &domain);
 
+    static int
+    numPoint() {
+        return y.size();
+    }
+
     static const field<BodyCoord>&
     bodyCoords() {
         return y;
@@ -34,6 +39,11 @@ public:
     double
     weight(int i, int j, int k = 0) const {
         return w(i, j, k);
+    }
+
+    double
+    weight(int I) const {
+        return w(I);
     }
 
     void
