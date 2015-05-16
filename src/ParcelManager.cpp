@@ -30,18 +30,12 @@ init(const Mesh &mesh) {
         parcel->init(i);
         parcel->x(timeIdx) = x;
         parcel->meshIndex(timeIdx).locate(mesh, x);
-        vec sizes(mesh.domain().numDim());
-#if defined LASM_IN_CARTESIAN
-        // TODO: Find a better way to specify grid sizes.
-        int I, J, K;
-        mesh.unwrapIndex(CENTER, i, I, J, K);
-        sizes[0] = mesh.gridInterval(0, HALF, I-1);
-        sizes[1] = mesh.gridInterval(1, HALF, J-1);
-        sizes[2] = mesh.gridInterval(2, HALF, K);
-#endif
-        parcel->skeletonPoints().init(mesh, sizes);
+        auto cellSize = mesh.cellSize(CENTER, i);
+        parcel->skeletonPoints().init(mesh, cellSize);
+        parcel->volume(timeIdx) = mesh.cellVolume(i);
         parcel->updateDeformMatrix(timeIdx);
-        parcel->quadraturePoints().updateSpaceCoords(timeIdx);
+        parcel->resetSkeletonPoints(timeIdx, mesh);
+        parcel->quadraturePoints().updateSpaceCoords(mesh, timeIdx);
         parcel->tracers().init();
         _parcels.push_back(parcel);
     }
@@ -110,7 +104,7 @@ output(const TimeLevelIndex<2> &timeIdx, int ncId) {
     intData = new int[_parcels.size()];
     l = 0;
     for (auto parcel : _parcels) {
-        intData[l++] = parcel->ID();
+        intData[l++] = parcel->id();
     }
     nc_put_var(ncId, idVarId, intData);
     delete [] intData;
@@ -129,7 +123,7 @@ output(const TimeLevelIndex<2> &timeIdx, int ncId) {
     l = 0;
     for (auto parcel : _parcels) {
         for (int t = 0; t < Tracers::numTracer(); ++t) {
-            doubleData[l++] = parcel->tracers().mass(timeIdx, t);
+            doubleData[l++] = parcel->tracers().mass(t);
         }
     }
     nc_put_var(ncId, mVarId, doubleData);
@@ -173,8 +167,8 @@ output(const TimeLevelIndex<2> &timeIdx, int ncId) {
 void ParcelManager::
 resetTracers(const TimeLevelIndex<2> &timeIdx) {
     for (auto parcel : _parcels) {
-        parcel->tracers().reset(timeIdx);
+        parcel->tracers().reset();
     }
-}
+} // output
 
 } // lasm

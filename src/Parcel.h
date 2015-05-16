@@ -3,6 +3,8 @@
 
 #include "lasm_commons.h"
 
+#include "MeshAdaptor.h"
+
 namespace lasm {
 
 class QuadraturePoints;
@@ -12,7 +14,7 @@ class Tracers;
 class Parcel {
 protected:
     static const Domain *domain;
-    int _ID;
+    int _id;
     TimeLevels<SpaceCoord, 2> _x;
     TimeLevels<mat, 2> _H;
     TimeLevels<double, 2> _detH;
@@ -35,8 +37,8 @@ public:
     virtual ~Parcel();
 
     int
-    ID() const {
-        return _ID;
+    id() const {
+        return _id;
     }
 
     const SpaceCoord&
@@ -64,9 +66,9 @@ public:
         return _detH.level(timeIdx);
     }
 
-    double
-    volume(const TimeLevelIndex<2> &timeIdx) const {
-        return detH(timeIdx);
+    double&
+    volume(const TimeLevelIndex<2> &timeIdx) {
+        return _detH.level(timeIdx);
     }
 
     const mat&
@@ -133,7 +135,7 @@ public:
     init(const Domain &domain);
 
     virtual void
-    init(int ID);
+    init(int id);
 
     void
     updateDeformMatrix(const TimeLevelIndex<2> &timeIdx);
@@ -178,6 +180,10 @@ public:
     numConnectedCell() const {
         return _numConnectedCell;
     }
+
+    void
+    dump(const TimeLevelIndex<2> &timeIdx,
+         const MeshAdaptor &meshAdaptor) const;
 }; // Parcel
 
 } // lasm

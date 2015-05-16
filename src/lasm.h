@@ -11,5 +11,6 @@
 
 // TODO: Move this class to GEOMTK.
 #include "Cartesian3DTest.h"
+#include "DeformationTest.h"
 
 #endif

@@ -2,11 +2,12 @@
 
 Cartesian3DTest::
 Cartesian3DTest() {
-
+    REPORT_ONLINE;
 }
 
 Cartesian3DTest::
 ~Cartesian3DTest() {
+    REPORT_OFFLINE;
 }
 
 void Cartesian3DTest::
@@ -20,6 +21,8 @@ init(const ConfigManager &configManager, AdvectionManager &advectionManager) {
     std::string outputPattern = configManager.getValue<std::string>("test_case", "output_pattern");
     TimeStepUnit freqUnit = geomtk::timeStepUnitFromString(configManager.getValue<std::string>("test_case", "output_frequency_unit"));
     int freq = configManager.getValue<int>("test_case", "output_frequency");
+    // Initialize time manager.
+    _stepSize = io.file(dataIdx).getAttribute<float>("time_step_size_in_seconds");
     // Initialize IO manager.
     io.init(_timeManager);
     dataIdx = io.addInputFile(*_mesh, dataRoot+"/"+dataPattern);
@@ -34,6 +37,11 @@ init(const ConfigManager &configManager, AdvectionManager &advectionManager) {
                               {&velocityField(0),
                                &velocityField(1),
                                &velocityField(2)});
+    io.file(outputIdx).addField("double", FULL_DIMENSION,
+                                {&velocityField(0),
+                                 &velocityField(1),
+                                 &velocityField(2),
+                                 &velocityField.divergence()});
     // Initialize advection manager.
     advectionManager.init(configManager, *_mesh);
     // Initialize density fields for input and output.
@@ -48,8 +56,6 @@ init(const ConfigManager &configManager, AdvectionManager &advectionManager) {
         io.file(outputIdx).addField("double", FULL_DIMENSION, {&densities[t]});
         advectionManager.addTracer(name, units, longName);
     }
-    // Initialize time manager.
-    _stepSize = io.file(dataIdx).getAttribute<float>("time_step_size_in_seconds");
 } // init
 
 void Cartesian3DTest::
@@ -91,5 +97,7 @@ output(const TimeLevelIndex<2> &timeIdx, AdvectionManager &advectionManager) {
         }
         io.output<double>(outputIdx, {&densities[t]});
     }
+    io.output<double, 2>(outputIdx, timeIdx, {&velocityField(0),
+        &velocityField(1),  &velocityField(2), &velocityField.divergence()});
     io.close(outputIdx);
 } // output

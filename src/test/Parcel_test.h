@@ -38,7 +38,7 @@ protected:
 
 TEST_F(ParcelTest, Basics) {
     parcel.x(oldIdx);
-    ASSERT_EQ(parcel.ID(), 0);
+    ASSERT_EQ(parcel.id(), 0);
     ASSERT_EQ(parcel.x(oldIdx)(0), 0.5);
     ASSERT_EQ(parcel.x(oldIdx)(1), 0.5);
     ASSERT_EQ(parcel.x(oldIdx)(2), 0.5);

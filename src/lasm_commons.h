@@ -1,11 +1,12 @@
 #ifndef __LASM_commons__
 #define __LASM_commons__
 
-#define LASM_IN_CARTESIAN
+#define LASM_IN_SPHERE
+#define LASM_USE_RLL_MESH
 
 #if defined LASM_IN_CARTESIAN
 #include "geomtk/Cartesian.h"
-#elif defined LASM_IN_SPHERE_WITH_RLL_MESH
+#elif defined LASM_IN_SPHERE && defined LASM_USE_RLL_MESH
 #include "geomtk/RLLSphere.h"
 #endif
 
@@ -22,7 +23,7 @@ using std::cout;
 using std::endl;
 using std::setw;
 
-using geomtk::BILINEAR;
+using geomtk::LINEAR;
 
 class Parcel;
 typedef list<Parcel*> Parcels;

@@ -13,6 +13,7 @@ private:
     static field<double> w;
     static field<BodyCoord> y;
     field<SpaceCoord> x;
+    field<MeshIndex> I;
     const Parcel *hostParcel;
 public:
     QuadraturePoints(const Parcel *hostParcel);
@@ -47,11 +48,16 @@ public:
     }
 
     void
-    updateSpaceCoords(const TimeLevelIndex<2> &timeIdx);
+    updateSpaceCoords(const Mesh &mesh, const TimeLevelIndex<2> &timeIdx);
 
     const field<SpaceCoord>&
     spaceCoords() const {
         return x;
+    }
+
+    const field<MeshIndex>&
+    meshIndexs() const {
+        return I;
     }
 }; // QuadraturePoints
 

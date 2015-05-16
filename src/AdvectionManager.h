@@ -13,12 +13,14 @@ class AdvectionManager
     MeshAdaptor meshAdaptor;
     Regrid regrid;
 
-    double filamentLimit;   // control the tracer filament degree
     double minBiasLimit;    //
     double maxBiasLimit;    //
     double radialMixing;    // control the radial mixing degree
     double lateralMixing;   // control the lateral mixing degree
     double restoreFactor;   // control the base density restore degree
+
+    TreeType *gridTree;
+    mat gridCoords;
 public:
     AdvectionManager();
     virtual ~AdvectionManager();
@@ -41,7 +43,7 @@ public:
 
     virtual double
     density(const TimeLevelIndex<2> &timeIdx, int tracerIdx, int cellIdx) const {
-        return meshAdaptor.mass(timeIdx, tracerIdx, cellIdx)/meshAdaptor.volume(cellIdx);
+        return meshAdaptor.density(timeIdx, tracerIdx, cellIdx);
     }
 protected:
     void

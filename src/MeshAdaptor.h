@@ -7,10 +7,9 @@ namespace lasm {
 
 class MeshAdaptor {
     const Mesh *mesh;
-    vector<Field<double, 2>*> _masses;
+    vector<Field<double, 2>*> _densities;
     vector<uword> _numConnectedParcel;
     vector<vector<Parcel*> > _connectedParcels;
-    vector<vector<uword> > _numContainedQuadraturePoint;
     vector<vector<double> > _remapWeights;
     vector<uword> _numContainedParcel;
     vector<vector<Parcel*> > _containedParcels;
@@ -32,13 +31,18 @@ public:
     }
 
     const vector<Field<double, 2>*>&
-    masses() const {
-        return _masses;
+    densities() const {
+        return _densities;
     }
 
     double&
+    density(const TimeLevelIndex<2> &timeIdx, int tracerIdx, int cellIdx) const {
+        return (*_densities[tracerIdx])(timeIdx, cellIdx);
+    }
+
+    double
     mass(const TimeLevelIndex<2> &timeIdx, int tracerIdx, int cellIdx) const {
-        return (*_masses[tracerIdx])(timeIdx, cellIdx);
+        return (*_densities[tracerIdx])(timeIdx, cellIdx)*volume(cellIdx);
     }
 
     void
@@ -50,17 +54,16 @@ public:
     void
     connectParcel(int cellIdx, Parcel *parcel, double weight);
 
-    void
-    resetConnectedParcels();
-
-    uword
-    numContainedQuadraturePoint(int cellIdx, Parcel *parcel) const;
-
     double
     remapWeight(int cellIdx, Parcel *parcel) const;
 
     double&
     remapWeight(int cellIdx, Parcel *parcel);
+
+    double
+    remapWeight(int cellIdx, int parcelIdx) const {
+        return _remapWeights[cellIdx][parcelIdx];
+    }
 
     uword
     numConnectedParcel(int cellIdx) const {
@@ -74,9 +77,6 @@ public:
     void
     containParcel(int cellIdx, Parcel *parcel);
 
-    void
-    resetContainedParcels();
-
     uword
     numContainedParcel(int cellIdx) const {
         return _numContainedParcel[cellIdx];
@@ -86,6 +86,9 @@ public:
     containedParcels(int cellIdx) const {
         return _containedParcels[cellIdx];
     }
+
+    void
+    resetConnectedAndContainedParcels();
 }; // MeshAdaptor
 
 } // lasm

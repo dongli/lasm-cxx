@@ -14,19 +14,26 @@ QuadraturePoints(const Parcel *hostParcel) {
     if (domain->numDim() == 2) {
         x.set_size(ShapeFunction::nodes().size(),
                    ShapeFunction::nodes().size());
+        I.set_size(ShapeFunction::nodes().size(),
+                   ShapeFunction::nodes().size());
         for (uword j = 0; j < ShapeFunction::nodes().size(); ++j) {
             for (uword i = 0; i < ShapeFunction::nodes().size(); ++i) {
-                x(i, j).setNumDim(domain->numDim());
+                x(i, j).init(domain->numDim());
+                I(i, j).init(domain->numDim());
             }
         }
     } else if (domain->numDim() == 3) {
         x.set_size(ShapeFunction::nodes().size(),
                    ShapeFunction::nodes().size(),
                    ShapeFunction::nodes().size());
+        I.set_size(ShapeFunction::nodes().size(),
+                   ShapeFunction::nodes().size(),
+                   ShapeFunction::nodes().size());
         for (uword k = 0; k < ShapeFunction::nodes().size(); ++k) {
             for (uword j = 0; j < ShapeFunction::nodes().size(); ++j) {
                 for (uword i = 0; i < ShapeFunction::nodes().size(); ++i) {
-                    x(i, j, k).setNumDim(domain->numDim());
+                    I(i, j, k).init(domain->numDim());
+                    x(i, j, k).init(domain->numDim());
                 }
             }
         }
@@ -49,7 +56,7 @@ init(const Domain &_domain) {
                    ShapeFunction::nodes().size());
         for (uword j = 0; j < ShapeFunction::nodes().size(); ++j) {
             for (uword i = 0; i < ShapeFunction::nodes().size(); ++i) {
-                y(i, j).setNumDim(domain->numDim());
+                y(i, j).init(domain->numDim());
                 w(i, j) = ShapeFunction::weights()(i)*
                           ShapeFunction::weights()(j);
                 y(i, j)(0) = ShapeFunction::nodes()(i);
@@ -66,7 +73,7 @@ init(const Domain &_domain) {
         for (uword k = 0; k < ShapeFunction::nodes().size(); ++k) {
             for (uword j = 0; j < ShapeFunction::nodes().size(); ++j) {
                 for (uword i = 0; i < ShapeFunction::nodes().size(); ++i) {
-                    y(i, j, k).setNumDim(domain->numDim());
+                    y(i, j, k).init(domain->numDim());
                     w(i, j, k) = ShapeFunction::weights()(i)*
                                  ShapeFunction::weights()(j)*
                                  ShapeFunction::weights()(k);
@@ -80,9 +87,10 @@ init(const Domain &_domain) {
 } // init
 
 void QuadraturePoints::
-updateSpaceCoords(const TimeLevelIndex<2> &timeIdx) {
+updateSpaceCoords(const Mesh &mesh, const TimeLevelIndex<2> &timeIdx) {
     for (uword i = 0; i < y.size(); ++i) {
-        hostParcel->calcSpaceCoord(timeIdx, y(i), x(i));
+        hostParcel->calcSpaceCoord(timeIdx, y[i], x[i]);
+        I[i].locate(mesh, x[i]);
     }
 } // updateSpaceCoords
 

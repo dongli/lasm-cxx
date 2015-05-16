@@ -12,15 +12,21 @@ class Tracers {
     static vector<string> _units;
     static vector<string> _comments;
 
-    TimeLevels<vec, 2> _masses;
+    vec _masses;
+    vec _densities;
     const Parcel *hostParcel;
 public:
     Tracers(const Parcel *hostParcel);
     virtual ~Tracers();
 
     const vec&
-    masses(const TimeLevelIndex<2> &timeIdx) const {
-        return _masses.level(timeIdx);
+    masses() const {
+        return _masses;
+    }
+
+    const vec&
+    densities() const {
+        return _densities;
     }
 
     static void
@@ -47,12 +53,14 @@ public:
     }
 
     double&
-    mass(const TimeLevelIndex<2> &timeIdx, int speciesIdx) {
-        return _masses.level(timeIdx)(speciesIdx);
+    mass(int speciesIdx) {
+        return _masses(speciesIdx);
     }
 
-    double
-    density(const TimeLevelIndex<2> &timeIdx, int speciesIdx) const;
+    double&
+    density(int speciesIdx) {
+        return _densities(speciesIdx);
+    }
 
     void
     init();
@@ -61,7 +69,7 @@ public:
     add();
 
     void
-    reset(const TimeLevelIndex<2> &timeIdx);
+    reset();
 }; // Tracers
 
 } // lasm

@@ -26,26 +26,21 @@ add(const string &name, const string &unit, const string &comment) {
     _comments.push_back(comment);
 } // add
 
-double Tracers::
-density(const TimeLevelIndex<2> &timeIdx, int speciesIdx) const  {
-    return _masses.level(timeIdx)(speciesIdx)/hostParcel->volume(timeIdx);
-} // density
-
 void Tracers::
 init() {
 } // init
 
 void Tracers::
 add() {
-    for (int l = 0; l < _masses.numLevel(); ++l) {
-        _masses.level(l).resize(_names.size());
-    }
-}
+    _masses.resize(_names.size());
+    _densities.resize(_names.size());
+} // add
 
 void Tracers::
-reset(const TimeLevelIndex<2> &timeIdx) {
+reset() {
     for (int t = 0; t < numTracer(); ++t) {
-        _masses.level(timeIdx)[t] = 0;
+        _masses[t] = 0;
+        _densities[t] = 0;
     }
 } // reset
 

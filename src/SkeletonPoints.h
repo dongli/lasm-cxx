@@ -24,7 +24,7 @@ public:
     void
     init(const Mesh &mesh, const vec &sizes);
 
-    static int
+    static uword
     numPoint() {
         return y.size();
     }
@@ -49,6 +49,11 @@ public:
         return x.level(timeIdx)(i);
     }
 
+    SpaceCoord&
+    spaceCoord(const TimeLevelIndex<2> &timeIdx, int i) {
+        return x.level(timeIdx)(i);
+    }
+
     const field<SpaceCoord>&
     localSpaceCoords(const TimeLevelIndex<2> &timeIdx) const {
         return xl.level(timeIdx);
@@ -58,6 +63,9 @@ public:
     localSpaceCoord(const TimeLevelIndex<2> &timeIdx, int i) const {
         return xl.level(timeIdx)(i);
     }
+
+    void
+    updateLocalSpaceCoords(const TimeLevelIndex<2> &timeIdx);
 }; // SkeletonPoints
 
 } // lasm
