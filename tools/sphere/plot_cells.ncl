@@ -216,7 +216,7 @@ begin
         end if
         if (isStrSubset(test_case, "deform")) then
             if (ic .eq. "ch") then
-                q = f->q1
+                q = f->q1/f->q0
             end if
             if (ic .eq. "sc") then
                 q = f->q3/f->q0

@@ -6,11 +6,11 @@
 // TODO: Move this class to GEOMTK.
 
 class Cartesian3DTest
-: public geomtk::AdvectionTestInterface<2, Domain, Mesh, Field<double>, VelocityField, IOManager> {
+: public geomtk::AdvectionTestInterface<2, Domain, Mesh, Field, VelocityField, IOManager> {
     arma::uword dataIdx;
 public:
-    typedef geomtk::AdvectionManagerInterface<2, Domain, Mesh, VelocityField> AdvectionManager;
-    typedef geomtk::AdvectionTestInterface<2, Domain, Mesh, Field<double>, VelocityField, IOManager> Interface;
+    typedef geomtk::AdvectionManagerInterface<2, Domain, Mesh, Field, VelocityField> AdvectionManager;
+    typedef geomtk::AdvectionTestInterface<2, Domain, Mesh, Field, VelocityField, IOManager> Interface;
 
     Cartesian3DTest();
     virtual ~Cartesian3DTest();
@@ -27,7 +27,7 @@ public:
 
     virtual void
     output(const TimeLevelIndex<2> &timeIdx,
-           AdvectionManager &advectionManager);
+           const AdvectionManager &advectionManager);
 }; // Cartesian3DTest
 
 #endif // __LASM_Cartesian3DTest__

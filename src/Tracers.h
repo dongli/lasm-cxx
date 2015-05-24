@@ -11,9 +11,11 @@ class Tracers {
     static vector<string> _names;
     static vector<string> _units;
     static vector<string> _comments;
+    static vec _totalMasses;
 
     vec _masses;
     vec _densities;
+    vec _tendencies;
     const Parcel *hostParcel;
 public:
     Tracers(const Parcel *hostParcel);
@@ -52,14 +54,34 @@ public:
         return _names.size();
     }
 
-    double&
-    mass(int speciesIdx) {
-        return _masses(speciesIdx);
+    static const vec&
+    totalMasses() {
+        return _totalMasses;
+    }
+
+    static double&
+    totalMass(int tracerIdx) {
+        return _totalMasses[tracerIdx];
+    }
+
+    static void
+    resetTotalMasses() {
+        _totalMasses.fill(0);
     }
 
     double&
-    density(int speciesIdx) {
-        return _densities(speciesIdx);
+    mass(int tracerIdx) {
+        return _masses[tracerIdx];
+    }
+
+    double&
+    density(int tracerIdx) {
+        return _densities[tracerIdx];
+    }
+
+    double&
+    tendency(int tracerIdx) {
+        return _tendencies[tracerIdx];
     }
 
     void

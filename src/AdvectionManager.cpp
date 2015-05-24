@@ -8,18 +8,21 @@
 namespace lasm {
 
 AdvectionManager::
-AdvectionManager() : geomtk::AdvectionManagerInterface<2, Domain, Mesh, VelocityField>() {
-    minBiasLimit = 0.1;
-    maxBiasLimit = 0.5;
+AdvectionManager()
+: geomtk::AdvectionManagerInterface<2, Domain, Mesh, Field, VelocityField>() {
+    REPORT_ONLINE;
 }
 
 AdvectionManager::
 ~AdvectionManager() {
-
+    REPORT_OFFLINE
 }
 
 void AdvectionManager::
 init(const ConfigManager &configManager, const Mesh &mesh) {
+    filamentLimit = configManager.getValue("lasm", "filament_limit", 5.0);
+    minBiasLimit = configManager.getValue("lasm", "min_bias_limit", 0.1);
+    maxBiasLimit = configManager.getValue("lasm", "max_bias_limit", 0.5);
     domain = &mesh.domain();
     this->mesh = &mesh;
     // Initialize objects.
@@ -32,12 +35,27 @@ init(const ConfigManager &configManager, const Mesh &mesh) {
     meshAdaptor.init(mesh);
     // Initialize tree objects.
     SpaceCoord x(domain->numDim());
-    gridCoords.reshape(x.data().size(), mesh.totalNumGrid(CENTER));
+#ifdef LASM_USE_RLL_MESH
+    gridCoords.reshape(3, mesh.totalNumGridWithUniquePoleGrid(CENTER));
+#else
+    gridCoords.reshape(3, mesh.totalNumGrid(CENTER));
+#endif
+    int k = 0;
     for (uword i = 0; i < mesh.totalNumGrid(CENTER); ++i) {
-        vec data = mesh.gridCoord(CENTER, i).data();
-        for (uword j = 0; j < data.size(); ++j) {
-            gridCoords(j, i) = data[j];
+#ifdef LASM_USE_RLL_MESH
+        // In regular lat-lon mesh, there are whole zonal grids located on the
+        // Poles. This will cause many computational problems, so we just use
+        // the first grid to represent others.
+        auto spanIdx = mesh.unwrapIndex(CENTER, i);
+        if ((spanIdx[1] == mesh.js(FULL) && spanIdx[0] != mesh.is(FULL)) ||
+            (spanIdx[1] == mesh.je(FULL) && spanIdx[0] != mesh.is(FULL))) {
+            continue;
         }
+#endif
+        for (uword j = 0; j < 3; ++j) {
+            gridCoords(j, k) = mesh.gridCoord(CENTER, i).cartCoord()[j];
+        }
+        k++;
     }
     MetricType::domain = domain;
     gridTree = new TreeType(gridCoords);
@@ -66,6 +84,7 @@ advance(double dt, const TimeLevelIndex<2> &newIdx, const VelocityField &velocit
 void AdvectionManager::
 input(const TimeLevelIndex<2> &timeIdx, double *q) {
     // Copy input tracer density onto internal mesh grids.
+    Tracers::resetTotalMasses();
     int l = 0;
     for (int t = 0; t < Tracers::numTracer(); ++t) {
         for (uword i = 0; i < mesh->totalNumGrid(CENTER); ++i) {
@@ -73,14 +92,17 @@ input(const TimeLevelIndex<2> &timeIdx, double *q) {
         }
         // Set parcel mass and density as the ones in mesh cell.
         for (auto parcel : parcelManager.parcels()) {
-            parcel->tracers().mass(t) = meshAdaptor.mass(timeIdx, t, parcel->id());
-            parcel->tracers().density(t) = density(timeIdx, t, parcel->id());
+            int i = parcel->hostCellIndex();
+            parcel->tracers().mass(t) = meshAdaptor.mass(timeIdx, t, i);
+            parcel->tracers().density(t) = meshAdaptor.density(timeIdx, t, parcel->id());
+            Tracers::totalMass(t) += parcel->tracers().mass(t);
         }
     }
+    remapFromParcelsToGrids(timeIdx);
 } // input
 
 void AdvectionManager::
-output(const TimeLevelIndex<2> &timeIdx, int ncId) {
+output(const TimeLevelIndex<2> &timeIdx, int ncId) const {
     // Append global attributes.
     nc_redef(ncId);
     nc_put_att(ncId, NC_GLOBAL, "radial_mixing", NC_DOUBLE, 1, &radialMixing);
@@ -101,6 +123,7 @@ integrate(double dt, const TimeLevelIndex<2> &newIdx,
     TimeLevelIndex<2> halfIdx = newIdx-0.5;
     double dt05 = 0.5*dt;
     const auto &divergence = velocityField.divergence();
+    Tracers::resetTotalMasses();
     for (auto parcel : parcelManager.parcels()) {
         Velocity v1(domain->numDim());
         Velocity v2(domain->numDim());
@@ -129,21 +152,21 @@ integrate(double dt, const TimeLevelIndex<2> &newIdx,
         regrid.run(LINEAR, oldIdx, divergence, x0, div, &I0);
         mesh->move(x0, dt05, v1, I0, x1);
         I1.locate(*mesh, x1);
-        k1 = -parcel->volume(oldIdx)*div;
+        k1 = parcel->volume(oldIdx)*div;
         volume = parcel->volume(oldIdx)+dt05*k1;
         // Stage 2.
         regrid.run(LINEAR, halfIdx, velocityField, x1, v2, &I1);
         regrid.run(LINEAR, halfIdx, divergence, x1, div, &I1);
         mesh->move(x0, dt05, v2, I0, x1);
         I1.locate(*mesh, x1);
-        k2 = -volume*div;
+        k2 = volume*div;
         volume = parcel->volume(oldIdx)+dt05*k2;
         // Stage 3.
         regrid.run(LINEAR, halfIdx, velocityField, x1, v3, &I1);
         regrid.run(LINEAR, halfIdx, divergence, x1, div, &I1);
         mesh->move(x0, dt, v3, I0, x1);
         I1.locate(*mesh, x1);
-        k3 = -volume*div;
+        k3 = volume*div;
         volume = parcel->volume(oldIdx)+dt*k3;
         // Stage 4.
         regrid.run(LINEAR, newIdx, velocityField, x1, v4, &I1);
@@ -151,7 +174,7 @@ integrate(double dt, const TimeLevelIndex<2> &newIdx,
         v = (v1+v2*2.0+v3*2.0+v4)/6.0;
         mesh->move(x0, dt, v, I0, x1);
         I1.locate(*mesh, x1);
-        k4 = -volume*div;
+        k4 = volume*div;
         parcel->updateVolume(newIdx, parcel->volume(oldIdx)+dt*(k1+2*k2+2*k3+k4)/6);
         // Update the skeleton points.
         field<SpaceCoord> &xs0 = parcel->skeletonPoints().spaceCoords(oldIdx);
@@ -190,9 +213,22 @@ integrate(double dt, const TimeLevelIndex<2> &newIdx,
         }
         parcel->updateDeformMatrix(newIdx);
         for (uword t = 0; t < Tracers::numTracer(); ++t) {
+            parcel->tracers().mass(t) += parcel->tracers().tendency(t)*dt;
             parcel->tracers().density(t) = parcel->tracers().mass(t)/parcel->volume(newIdx);
+            Tracers::totalMass(t) += parcel->tracers().mass(t);
         }
     }
+#ifndef NDEBUG
+    if (domain->numDim() == 2) {
+        double totalVolume = 0;
+        for (auto parcel : parcelManager.parcels()) {
+            totalVolume += parcel->volume(newIdx);
+        }
+        double sphereArea = 4*PI*pow(domain->radius(), 2);
+        double error = (totalVolume-sphereArea)/sphereArea;
+        assert(fabs(error) < 1.0e-12);
+    }
+#endif
 } // integrate
 
 void AdvectionManager::
@@ -200,17 +236,18 @@ connectParcelAndGrids(const TimeLevelIndex<2> &timeIdx, Parcel *parcel) {
     meshAdaptor.containParcel(parcel->meshIndex(timeIdx).cellIndex(*mesh, CENTER), parcel);
     parcel->updateShapeSize(timeIdx);
     double longAxisSize = parcel->shapeSize(timeIdx)[0];
-    vec data = parcel->x(timeIdx).data();
-    SearchType search(gridTree, NULL, gridCoords, data, true);
+    SearchType search(gridTree, NULL, gridCoords, parcel->x(timeIdx).cartCoord(), true);
     mlpack::math::Range r(0, longAxisSize);
     vector<vector<size_t> > neighbors;
     vector<vector<double> > distances;
     search.Search(r, neighbors, distances);
     BodyCoord y(domain->numDim());
     for (int i = 0; i < neighbors[0].size(); ++i) {
-        int cellIdx = neighbors[0][i];
+        int cellIdx = meshAdaptor.cellIndex(neighbors[0][i]);
         const SpaceCoord &x = meshAdaptor.coord(cellIdx);
         parcel->calcBodyCoord(timeIdx, x, y);
+        // NOTE: Increase influence radius of parcel to avoid fluctuation.
+        y() *= 0.5;
         double w = parcel->shapeFunction(timeIdx, y);
         if (w == 0) continue;
         meshAdaptor.connectParcel(cellIdx, parcel, w);
@@ -240,9 +277,9 @@ mixParcels(const TimeLevelIndex<2> &timeIdx) {
             double bias0 = domain->calcDistance(x[i], X)/parcel->shapeSize(timeIdx).max();
             if (bias0 > bias) bias = bias0;
         }
+        vector<Parcel*> neighborParcels = getNeighborParcels(parcel);
         // Set the bias limit based on the filament of the parcel and its volume
         // compared with the neighbor tracers.
-        vector<Parcel*> neighborParcels = getNeighborParcels(parcel);
         double meanVolume = parcel->volume(timeIdx);
         for (uword i = 0; i < neighborParcels.size(); ++i) {
             meanVolume += neighborParcels[i]->volume(timeIdx);
@@ -250,18 +287,18 @@ mixParcels(const TimeLevelIndex<2> &timeIdx) {
         meanVolume /= neighborParcels.size()+1;
         double ratio = parcel->volume(timeIdx)/meanVolume;
         double biasLimit = transitionFunction(1, maxBiasLimit, 5, minBiasLimit,
-                                              ratio*parcel->filamentDegree(timeIdx));
+                                              ratio*parcel->filament());
         // Check parcel bias.
         bool isDegenerated = true;
         // TODO: Redesign the thresholds.
-        if (bias < biasLimit) {
+        if (bias < biasLimit && parcel->filament() < filamentLimit) {
             isDegenerated = false;
 #ifndef LASM_TEST_ALL_MIX
             continue;
 #endif
         }
         // Calcuate the mixing weights.
-        vec x0(2);
+        vec x0(domain->numDim());
 #ifdef LASM_IN_SPHERE
         domain->project(geomtk::SphereDomain::STEREOGRAPHIC, parcel->x(timeIdx),
                         parcel->longAxisVertexSpaceCoord(), x0);
@@ -269,7 +306,7 @@ mixParcels(const TimeLevelIndex<2> &timeIdx) {
         x0 = parcel->longAxisVertexSpaceCoord()()-parcel->x(timeIdx)();
 #endif
         double n0 = norm(x0, 2);
-        vec x1(2);
+        vec x1(domain->numDim());
         vec weights(neighborParcels.size(), arma::fill::zeros);
         for (uword i = 0; i < neighborParcels.size(); ++i) {
 #ifdef LASM_IN_SPHERE
@@ -354,7 +391,8 @@ mixParcels(const TimeLevelIndex<2> &timeIdx) {
             parcel->tracers().density(t) = parcel->tracers().mass(t)/parcel->volume(timeIdx);
             for (uword i = 0; i < neighborParcels.size(); ++i) {
                 neighborParcels[i]->tracers().mass(t) *= fixer;
-                neighborParcels[i]->tracers().density(t) = neighborParcels[i]->tracers().mass(t)/neighborParcels[i]->volume(timeIdx);
+                neighborParcels[i]->tracers().density(t) =
+                    neighborParcels[i]->tracers().mass(t)/neighborParcels[i]->volume(timeIdx);
             }
         }
         // Change problematic parcel shape (make parcel more uniform).
@@ -363,7 +401,7 @@ mixParcels(const TimeLevelIndex<2> &timeIdx) {
         double a, b;
         // TODO: Redesign the uniform factor.
         double uniformFactor = transitionFunction(1, 1, 5, maxUniformFactor,
-                                                  parcel->filamentDegree(timeIdx));
+                                                  parcel->filament());
         a = pow(pow(uniformFactor, domain->numDim()-1), 1.0/domain->numDim());
         b = 1/a;
         auto S = parcel->S();
@@ -379,17 +417,94 @@ mixParcels(const TimeLevelIndex<2> &timeIdx) {
 void AdvectionManager::
 remapFromParcelsToGrids(const TimeLevelIndex<2> &timeIdx) {
     meshAdaptor.resetTracers(timeIdx);
-    for (uword i = 0; i < mesh->totalNumGrid(CENTER); ++i) {
-        double totalWeight = 0;
-        for (uword j = 0; j < meshAdaptor.numConnectedParcel(i); ++j) {
-            totalWeight += meshAdaptor.remapWeight(i, j);
+    vector<int> voidCellIdxs;
+    for (uword i = 0; i < gridCoords.n_cols; ++i) {
+        int cellIdx = meshAdaptor.cellIndex(i);
+        if (meshAdaptor.numConnectedParcel(cellIdx) == 0) {
+            voidCellIdxs.push_back(cellIdx);
+            continue;
         }
-        for (uword j = 0; j < meshAdaptor.numConnectedParcel(i); ++j) {
-            Parcel *parcel = meshAdaptor.connectedParcels(i)[j];
-            double weight = meshAdaptor.remapWeight(i, parcel)/totalWeight;
+        double totalWeight = 0;
+        for (uword j = 0; j < meshAdaptor.numConnectedParcel(cellIdx); ++j) {
+            totalWeight += meshAdaptor.remapWeight(cellIdx, j);
+        }
+        for (uword j = 0; j < meshAdaptor.numConnectedParcel(cellIdx); ++j) {
+            Parcel *parcel = meshAdaptor.connectedParcels(cellIdx)[j];
+            double weight = meshAdaptor.remapWeight(cellIdx, parcel)/totalWeight;
             for (int t = 0; t < Tracers::numTracer(); ++t) {
-                meshAdaptor.density(timeIdx, t, i) += parcel->tracers().density(t)*weight;
+                meshAdaptor.density(timeIdx, t, cellIdx) += parcel->tracers().density(t)*weight;
             }
+        }
+    }
+    // Fill void grids.
+    for (int i = 0; i < voidCellIdxs.size(); ++i) {
+        int cellIdx = voidCellIdxs[i];
+        SearchType search(gridTree, NULL, gridCoords, meshAdaptor.coord(cellIdx).cartCoord(), true);
+        double searchRadius = mesh->cellSize(CENTER, cellIdx).max();
+        vector<vector<size_t> > neighbors;
+        vector<vector<double> > distances;
+        while (true) {
+            mlpack::math::Range r(0, searchRadius);
+            search.Search(r, neighbors, distances);
+            if (neighbors[0].size() != 0) {
+                vector<int> neighborCellIdxs;
+                for (int j = 0; j < neighbors[0].size(); ++j) {
+                    int neighborCellIdx = meshAdaptor.cellIndex(neighbors[0][j]);
+                    // check if the cell is not a void one
+                    if (find(voidCellIdxs.begin(), voidCellIdxs.end(),
+                             neighborCellIdx) != voidCellIdxs.end() ||
+                        meshAdaptor.numConnectedParcel(neighborCellIdx) == 0) continue;
+                    neighborCellIdxs.push_back(neighborCellIdx);
+                }
+                if (neighborCellIdxs.size() == 0) {
+                    searchRadius *= 2;
+                    continue;
+                }
+                vec weights(neighborCellIdxs.size());
+                for (int i = 0; i < neighborCellIdxs.size(); ++i) {
+                    double d = domain->calcDistance(meshAdaptor.coord(cellIdx),
+                                                    meshAdaptor.coord(neighborCellIdxs[i]));
+                    weights[i] = 1/d;
+                }
+                weights /= sum(weights);
+                for (int i = 0; i < neighborCellIdxs.size(); ++i) {
+                    for (int t = 0; t < Tracers::numTracer(); ++t) {
+                        meshAdaptor.density(timeIdx, t, cellIdx) +=
+                        meshAdaptor.density(timeIdx, t, neighborCellIdxs[i])*weights[i];
+                    }
+                }
+                break;
+            } else {
+                // Increase the search radius and search again.
+                searchRadius *= 2;
+            }
+        }
+    }
+#ifdef LASM_USE_RLL_MESH
+    for (uword k = mesh->ks(FULL); k <= mesh->ke(FULL); ++k) {
+        for (uword i = mesh->is(FULL)+1; i <= mesh->ie(FULL); ++i) {
+            uword j1 = mesh->js(FULL);
+            uword j2 = mesh->je(FULL);
+            for (int t = 0; t < Tracers::numTracer(); ++t) {
+                meshAdaptor.density(t)(timeIdx, i, j1, k) =
+                meshAdaptor.density(t)(timeIdx, mesh->is(FULL), j1, k);
+                meshAdaptor.density(t)(timeIdx, i, j2, k) =
+                meshAdaptor.density(t)(timeIdx, mesh->is(FULL), j2, k);
+            }
+        }
+    }
+#endif
+    // Correct the total mass on the grids.
+    vec scale(Tracers::numTracer(), arma::fill::zeros);
+    for (uword i = 0; i < mesh->totalNumGrid(CENTER); ++i) {
+        for (int t = 0; t < Tracers::numTracer(); ++t) {
+            scale[t] += meshAdaptor.mass(timeIdx, t, i);
+        }
+    }
+    scale = Tracers::totalMasses()/scale;
+    for (uword i = 0; i < mesh->totalNumGrid(CENTER); ++i) {
+        for (int t = 0; t < Tracers::numTracer(); ++t) {
+            meshAdaptor.density(timeIdx, t, i) *= scale[t];
         }
     }
 } // remapFromParcelsToGrids

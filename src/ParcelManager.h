@@ -23,7 +23,7 @@ public:
     init(const Mesh &mesh);
 
     void
-    output(const TimeLevelIndex<2> &timeIdx, int ncId);
+    output(const TimeLevelIndex<2> &timeIdx, int ncId) const;
 
     void
     addTracer();

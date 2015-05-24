@@ -20,7 +20,7 @@ protected:
     TimeLevels<double, 2> _detH;
     TimeLevels<mat, 2> _invH;
     TimeLevels<vec, 2> _shapeSize;
-    TimeLevels<double, 2> _filamentDegree;
+    double _filament;
     mat _U, _V; vec _S;
     BodyCoord longAxisVertexY;
     SpaceCoord longAxisVertexX;
@@ -82,8 +82,8 @@ public:
     }
 
     double
-    filamentDegree(const TimeLevelIndex<2> &timeIdx) const {
-        return _filamentDegree.level(timeIdx);
+    filament() const {
+        return _filament;
     }
 
     const mat&

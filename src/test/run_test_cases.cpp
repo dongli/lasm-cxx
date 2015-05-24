@@ -20,7 +20,7 @@ int main(int argc, char const *argv[])
 
     while (!test.timeManager().isFinished()) {
         newIdx = oldIdx+1;
-        test.advanceDynamics(newIdx, advectionManager);
+        test.advance(newIdx, advectionManager);
         test.output(newIdx, advectionManager);
         oldIdx.shift();
     }

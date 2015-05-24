@@ -45,16 +45,17 @@ init(const ConfigManager &configManager, AdvectionManager &advectionManager) {
     // Initialize advection manager.
     advectionManager.init(configManager, *_mesh);
     // Initialize density fields for input and output.
-    int numTracer = io.file(dataIdx).getAttribute<int>("num_tracer");
-    densities.resize(numTracer);
+    numTracer = io.file(dataIdx).getAttribute<int>("num_tracer");
     for (int t = 0; t < numTracer; ++t) {
         std::string name = "q"+std::to_string(t);
         std::string longName = io.file(dataIdx).getAttribute<std::string>(name, "long_name");
         std::string units = io.file(dataIdx).getAttribute<std::string>(name, "units");
-        densities[t].create(name, units, longName, *_mesh, CENTER, _domain->numDim());
-        io.file(dataIdx).addField("double", FULL_DIMENSION, {&densities[t]});
-        io.file(outputIdx).addField("double", FULL_DIMENSION, {&densities[t]});
         advectionManager.addTracer(name, units, longName);
+        io.file(dataIdx).addField("double", FULL_DIMENSION,
+                                  {&advectionManager.density(t)});
+        io.file(outputIdx).addField("double", FULL_DIMENSION,
+                                    {&advectionManager.density(t),
+                                     &advectionManager.tendency(t)});
     }
 } // init
 
@@ -65,12 +66,12 @@ setInitialCondition(AdvectionManager &advectionManager) {
     io.input<double>(dataIdx, timeIdx, {&velocityField(0),
                                         &velocityField(1),
                                         &velocityField(2)});
-    double *q = new double[_mesh->totalNumGrid(CENTER)*densities.size()];
+    double *q = new double[numTracer*_mesh->totalNumGrid(CENTER)];
     int j = 0;
-    for (arma::uword t = 0; t < densities.size(); ++t) {
-        io.input<double>(dataIdx, {&densities[t]});
+    for (arma::uword t = 0; t < numTracer; ++t) {
+        io.input<double>(dataIdx, timeIdx, {&advectionManager.density(t)});
         for (arma::uword i = 0; i < _mesh->totalNumGrid(CENTER); ++i) {
-            q[j++] = densities[t](i);
+            q[j++] = advectionManager.density(t)(timeIdx, i);
         }
     }
     advectionManager.input(timeIdx, q);
@@ -89,13 +90,12 @@ advanceDynamics(const TimeLevelIndex<2> &timeIdx,
 } // advanceDynamics
 
 void Cartesian3DTest::
-output(const TimeLevelIndex<2> &timeIdx, AdvectionManager &advectionManager) {
+output(const TimeLevelIndex<2> &timeIdx,
+       const AdvectionManager &advectionManager) {
     io.create(outputIdx);
-    for (arma::uword t = 0; t < densities.size(); ++t) {
-        for (arma::uword i = 0; i < _mesh->totalNumGrid(CENTER); ++i) {
-            densities[t](i) = advectionManager.density(timeIdx, t, i);
-        }
-        io.output<double>(outputIdx, {&densities[t]});
+    for (arma::uword t = 0; t < numTracer; ++t) {
+        io.output<double, 2>(outputIdx, timeIdx,
+                             {&advectionManager.density(t)});
     }
     io.output<double, 2>(outputIdx, timeIdx, {&velocityField(0),
         &velocityField(1),  &velocityField(2), &velocityField.divergence()});

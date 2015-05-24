@@ -8,11 +8,12 @@
 namespace lasm {
 
 class AdvectionManager 
-: public geomtk::AdvectionManagerInterface<2, Domain, Mesh, VelocityField> {
+: public geomtk::AdvectionManagerInterface<2, Domain, Mesh, Field, VelocityField> {
     ParcelManager parcelManager;
     MeshAdaptor meshAdaptor;
     Regrid regrid;
 
+    double filamentLimit;   // control the filament degree
     double minBiasLimit;    //
     double maxBiasLimit;    //
     double radialMixing;    // control the radial mixing degree
@@ -39,11 +40,41 @@ public:
     input(const TimeLevelIndex<2> &timeIdx, double *q);
 
     virtual void
-    output(const TimeLevelIndex<2> &timeIdx, int ncId);
+    output(const TimeLevelIndex<2> &timeIdx, int ncId) const;
 
-    virtual double
-    density(const TimeLevelIndex<2> &timeIdx, int tracerIdx, int cellIdx) const {
+    virtual double&
+    density(const TimeLevelIndex<2> &timeIdx, int tracerIdx, int cellIdx) {
         return meshAdaptor.density(timeIdx, tracerIdx, cellIdx);
+    }
+
+    virtual const Field<double, 2>&
+    density(int tracerIdx) const {
+        return meshAdaptor.density(tracerIdx);
+    }
+
+    virtual Field<double, 2>&
+    density(int tracerIdx) {
+        return meshAdaptor.density(tracerIdx);
+    }
+
+    virtual double&
+    tendency(int tracerIdx, int cellIdx) {
+        return meshAdaptor.tendency(tracerIdx, cellIdx);
+    }
+
+    virtual const Field<double>&
+    tendency(int tracerIdx) const {
+        return meshAdaptor.tendency(tracerIdx);
+    }
+
+    virtual Field<double>&
+    tendency(int tracerIdx) {
+        return meshAdaptor.tendency(tracerIdx);
+    }
+
+    Parcels&
+    parcels() {
+        return parcelManager.parcels();
     }
 protected:
     void

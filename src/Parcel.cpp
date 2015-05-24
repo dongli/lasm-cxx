@@ -131,6 +131,7 @@ updateDeformMatrix(const TimeLevelIndex<2> &timeIdx) {
     _invH.level(timeIdx) = inv(H);
     longAxisVertexY() = _invH.level(timeIdx)*H*_V.col(0);
     calcSpaceCoord(timeIdx, longAxisVertexY, longAxisVertexX);
+    _filament = _S[0]/_S[1];
 } // updateDeformMatrix
 
 void Parcel::
@@ -141,6 +142,7 @@ updateDeformMatrix(const TimeLevelIndex<2> &timeIdx, const vec &S) {
     _invH.level(timeIdx) = inv(_H.level(timeIdx));
     longAxisVertexY() = _invH.level(timeIdx)*_H.level(timeIdx)*_V.col(0);
     calcSpaceCoord(timeIdx, longAxisVertexY, longAxisVertexX);
+    _filament = _S[0]/_S[1];
 } // updateDeformMatrix
 
 void Parcel::

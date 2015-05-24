@@ -1,6 +1,7 @@
 #ifndef __LASM_commons__
 #define __LASM_commons__
 
+#define LASM_TENDENCY_ON_PARCEL
 #define LASM_IN_SPHERE
 #define LASM_USE_RLL_MESH
 

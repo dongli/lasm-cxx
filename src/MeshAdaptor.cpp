@@ -22,12 +22,28 @@ init(const Mesh &mesh) {
     _remapWeights.resize(mesh.totalNumGrid(CENTER));
     _numContainedParcel.resize(mesh.totalNumGrid(CENTER));
     _containedParcels.resize(mesh.totalNumGrid(CENTER));
+#ifdef LASM_USE_RLL_MESH
+    _cellIndexs.resize(mesh.totalNumGridWithUniquePoleGrid(CENTER));
+    uword j = 0;
+    for (uword i = 0; i < mesh.totalNumGrid(CENTER); ++i) {
+        auto spanIdx = mesh.unwrapIndex(CENTER, i);
+        if ((spanIdx[1] == mesh.js(FULL) && spanIdx[0] != mesh.is(FULL)) ||
+            (spanIdx[1] == mesh.je(FULL) && spanIdx[0] != mesh.is(FULL))) {
+            continue;
+        }
+        _cellIndexs[j++] = i;
+    }
+#endif
 } // init
 
 void MeshAdaptor::
 addTracer(const string &name, const string &unit, const string &comment) {
     _densities.push_back(new Field<double, 2>);
-    _densities.back()->create(name, unit, comment, *mesh, CENTER, mesh->domain().numDim());
+    _densities.back()->create(name, unit, comment,
+                              *mesh, CENTER, mesh->domain().numDim());
+    _tendencies.push_back(new Field<double>);
+    _tendencies.back()->create("d"+name, unit+" s-1", "mass tendency of "+comment,
+                               *mesh, CENTER, mesh->domain().numDim());
 } // addTracer
 
 void MeshAdaptor::

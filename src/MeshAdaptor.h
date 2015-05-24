@@ -8,17 +8,24 @@ namespace lasm {
 class MeshAdaptor {
     const Mesh *mesh;
     vector<Field<double, 2>*> _densities;
+    vector<Field<double>*> _tendencies;
     vector<uword> _numConnectedParcel;
     vector<vector<Parcel*> > _connectedParcels;
     vector<vector<double> > _remapWeights;
     vector<uword> _numContainedParcel;
     vector<vector<Parcel*> > _containedParcels;
+    vector<uword> _cellIndexs;
 public:
     MeshAdaptor();
     virtual ~MeshAdaptor();
 
     void
     init(const Mesh &mesh);
+
+    uword
+    cellIndex(int i) const {
+        return _cellIndexs[i];
+    }
 
     const SpaceCoord&
     coord(int cellIdx) const {
@@ -30,19 +37,44 @@ public:
         return mesh->cellVolume(cellIdx);
     }
 
-    const vector<Field<double, 2>*>&
-    densities() const {
-        return _densities;
+    const Field<double, 2>&
+    density(int tracerIdx) const {
+        return *_densities[tracerIdx];
+    }
+
+    Field<double, 2>&
+    density(int tracerIdx) {
+        return *_densities[tracerIdx];
+    }
+
+    double
+    density(const TimeLevelIndex<2> &timeIdx, int tracerIdx, int cellIdx) const {
+        return (*_densities[tracerIdx])(timeIdx, cellIdx);
     }
 
     double&
-    density(const TimeLevelIndex<2> &timeIdx, int tracerIdx, int cellIdx) const {
+    density(const TimeLevelIndex<2> &timeIdx, int tracerIdx, int cellIdx) {
         return (*_densities[tracerIdx])(timeIdx, cellIdx);
     }
 
     double
     mass(const TimeLevelIndex<2> &timeIdx, int tracerIdx, int cellIdx) const {
         return (*_densities[tracerIdx])(timeIdx, cellIdx)*volume(cellIdx);
+    }
+
+    double&
+    tendency(int tracerIdx, int cellIdx) {
+        return (*_tendencies[tracerIdx])(cellIdx);
+    }
+
+    const Field<double>&
+    tendency(int tracerIdx) const {
+        return *_tendencies[tracerIdx];
+    }
+
+    Field<double>&
+    tendency(int tracerIdx) {
+        return *_tendencies[tracerIdx];
     }
 
     void

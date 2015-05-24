@@ -6,13 +6,13 @@
 // TODO: Move this class to GEOMTK.
 
 class DeformationTest
-: public geomtk::AdvectionTestInterface<2, Domain, Mesh, Field<double>, VelocityField, IOManager> {
+: public geomtk::AdvectionTestInterface<2, Domain, Mesh, Field, VelocityField, IOManager> {
 protected:
     std::string subcase;
     double period;
 public:
-    typedef geomtk::AdvectionManagerInterface<2, Domain, Mesh, VelocityField> AdvectionManager;
-    typedef geomtk::AdvectionTestInterface<2, Domain, Mesh, Field<double>, VelocityField, IOManager> Interface;
+    typedef geomtk::AdvectionManagerInterface<2, Domain, Mesh, Field, VelocityField> AdvectionManager;
+    typedef geomtk::AdvectionTestInterface<2, Domain, Mesh, Field, VelocityField, IOManager> Interface;
 
     DeformationTest();
     virtual ~DeformationTest();
@@ -24,12 +24,11 @@ public:
     setInitialCondition(AdvectionManager &advectionManager);
 
     virtual void
-    advanceDynamics(const TimeLevelIndex<2> &timeIdx,
-                    AdvectionManager &advectionManager);
-
-    virtual void
     output(const TimeLevelIndex<2> &timeIdx,
-           AdvectionManager &advectionManager);
+           const AdvectionManager &advectionManager);
+protected:
+    virtual void
+    setVelocityField(const TimeLevelIndex<2> &timeIdx);
 }; // DeformationTest
 
 #endif // __LASM_DeformationTest__

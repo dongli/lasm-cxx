@@ -29,20 +29,32 @@ init(const Mesh &mesh) {
         Parcel *parcel = new Parcel;
         parcel->init(i);
         parcel->x(timeIdx) = x;
+#ifdef LASM_USE_RLL_MESH
+        // In regular lat-lon mesh, there are whole zonal grids located on the
+        // Poles. This will cause many computational problems, so we just use
+        // the first grid to represent others.
+        auto spanIdx = mesh.unwrapIndex(CENTER, i);
+        if (spanIdx[1] == mesh.js(FULL)) {
+            double lat = parcel->x(timeIdx)(1)+mesh.gridInterval(1, FULL, mesh.js(FULL))*0.5;
+            parcel->x(timeIdx).setComp(1, lat);
+        } else if (spanIdx[1] == mesh.je(FULL)) {
+            double lat = parcel->x(timeIdx)(1)-mesh.gridInterval(1, FULL, mesh.je(FULL)-1)*0.5;
+            parcel->x(timeIdx).setComp(1, lat);
+        }
+#endif
         parcel->meshIndex(timeIdx).locate(mesh, x);
         auto cellSize = mesh.cellSize(CENTER, i);
         parcel->skeletonPoints().init(mesh, cellSize);
         parcel->volume(timeIdx) = mesh.cellVolume(i);
         parcel->updateDeformMatrix(timeIdx);
         parcel->resetSkeletonPoints(timeIdx, mesh);
-        parcel->quadraturePoints().updateSpaceCoords(mesh, timeIdx);
         parcel->tracers().init();
         _parcels.push_back(parcel);
     }
 } // init
 
 void ParcelManager::
-output(const TimeLevelIndex<2> &timeIdx, int ncId) {
+output(const TimeLevelIndex<2> &timeIdx, int ncId) const {
     int parcelDimId, skel1DimId, dimDimId, tracerDimId;
     int idVarId;
     int cDimIds[2], cVarId;

@@ -44,19 +44,18 @@ init(const ConfigManager &configManager, AdvectionManager &advectionManager) {
     // Initialize advection manager.
     advectionManager.init(configManager, *_mesh);
     // Initialize density fields for output.
-    densities.resize(8);
-    densities[0].create("q0", "1", "backgroud tracer",                  *_mesh, CENTER, 2);
-    densities[1].create("q1", "1", "cosine hills tracer",               *_mesh, CENTER, 2);
-    densities[2].create("q2", "1", "q1 correlated tracer",              *_mesh, CENTER, 2);
-    densities[3].create("q3", "1", "slotted cylinders tracer",          *_mesh, CENTER, 2);
-    densities[4].create("q4", "1", "Gaussian hills tracer",             *_mesh, CENTER, 2);
-    densities[5].create("q5", "1", "slotted cylinders tracer",          *_mesh, CENTER, 2);
-    densities[6].create("q6", "1", "displaced slotted cylinders tracer",*_mesh, CENTER, 2);
-    densities[7].create("q7", "1", "slotted cylinders residual tracer", *_mesh, CENTER, 2);
-    for (int t = 0; t < densities.size(); ++t) {
-        io.file(outputIdx).addField("double", FULL_DIMENSION, {&densities[t]});
-        advectionManager.addTracer(densities[t].name(), densities[t].units(),
-                                   densities[t].longName());
+    numTracer = 8;
+    advectionManager.addTracer("q0", "1", "backgroud tracer");
+    advectionManager.addTracer("q1", "1", "cosine hills tracer");
+    advectionManager.addTracer("q2", "1", "q1 correlated tracer");
+    advectionManager.addTracer("q3", "1", "slotted cylinders tracer");
+    advectionManager.addTracer("q4", "1", "Gaussian hills tracer");
+    advectionManager.addTracer("q5", "1", "slotted cylinders tracer");
+    advectionManager.addTracer("q6", "1", "displaced slotted cylinders tracer");
+    advectionManager.addTracer("q7", "1", "slotted cylinders residual tracer");
+    for (int t = 0; t < numTracer; ++t) {
+        io.file(outputIdx).addField("double", FULL_DIMENSION,
+                                    {&advectionManager.density(t)});
     }
 } // init
 
@@ -67,7 +66,7 @@ setInitialCondition(AdvectionManager &advectionManager) {
     c0.set(M_PI*5.0/6.0, 0.0); c0.transformToCart(domain());
     c1.set(M_PI*7.0/6.0, 0.0); c1.transformToCart(domain());
     double hmax, r, g, a, b, c;
-    double *q = new double[densities.size()*mesh().totalNumGrid(CENTER, 2)];
+    double *q = new double[numTracer*mesh().totalNumGrid(CENTER, 2)];
     int l = 0;
     // - background tracer
     for (int i = 0; i < mesh().totalNumGrid(CENTER, 2); ++i) {
@@ -139,8 +138,8 @@ setInitialCondition(AdvectionManager &advectionManager) {
             q[l++] = b;
     }
     // - Displaced slotted cylinders tracer
-    c0.set(M_PI*3.0/4.0, M_PI/18.0); c0.transformToCart(domain());
-    c1.set(M_PI*5.0/4.0, -M_PI/18.0); c1.transformToCart(domain());
+    c0.set(M_PI*3.0/4.0, M_PI/18.0);
+    c1.set(M_PI*5.0/4.0, -M_PI/18.0);
     b = 0.1, c = 2.0/3.0, r = 0.5;
     for (int i = 0; i < mesh().totalNumGrid(CENTER, 2); ++i) {
         const SpaceCoord &x = mesh().gridCoord(CENTER, i);
@@ -167,11 +166,28 @@ setInitialCondition(AdvectionManager &advectionManager) {
     TimeLevelIndex<2> timeIdx;
     advectionManager.input(timeIdx, q);
     delete [] q;
+    setVelocityField(timeIdx);
 } // setInitialCondition
 
 void DeformationTest::
-advanceDynamics(const TimeLevelIndex<2> &timeIdx,
-                AdvectionManager &advectionManager) {
+output(const TimeLevelIndex<2> &timeIdx,
+       const AdvectionManager &advectionManager) {
+    io.create(outputIdx);
+    for (arma::uword t = 0; t < numTracer; ++t) {
+        io.output<double, 2>(outputIdx, timeIdx,
+                             {&advectionManager.density(t)});
+    }
+    io.output<double, 2>(outputIdx, timeIdx, {&velocityField(0),
+                                              &velocityField(1),
+                                              &velocityField.divergence()});
+    if (io.isFileActive(outputIdx)) {
+        advectionManager.output(timeIdx, io.file(outputIdx).fileId);
+    }
+    io.close(outputIdx);
+} // output
+
+void DeformationTest::
+setVelocityField(const TimeLevelIndex<2> &timeIdx) {
     double cosT = cos(PI*_timeManager.seconds()/period);
     double k, R = _domain->radius();
     // advance velocity
@@ -231,26 +247,6 @@ advanceDynamics(const TimeLevelIndex<2> &timeIdx,
     } else {
         velocityField.applyBndCond(timeIdx, UPDATE_HALF_LEVEL);
     }
-    Interface::advanceDynamics(timeIdx, advectionManager);
-} // advanceDynamics
-
-void DeformationTest::
-output(const TimeLevelIndex<2> &timeIdx,
-       AdvectionManager &advectionManager) {
-    io.create(outputIdx);
-    for (arma::uword t = 0; t < densities.size(); ++t) {
-        for (arma::uword i = 0; i < _mesh->totalNumGrid(CENTER); ++i) {
-            densities[t](i) = advectionManager.density(timeIdx, t, i);
-        }
-        io.output<double>(outputIdx, {&densities[t]});
-    }
-    io.output<double, 2>(outputIdx, timeIdx, {&velocityField(0),
-                                              &velocityField(1),
-                                              &velocityField.divergence()});
-    if (io.isFileActive(outputIdx)) {
-        advectionManager.output(timeIdx, io.file(outputIdx).fileId);
-    }
-    io.close(outputIdx);
-} // output
+} // setVelocityField
 
 #endif // LASM_IN_SPHERE
