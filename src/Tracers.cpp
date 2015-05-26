@@ -40,12 +40,13 @@ add() {
 } // add
 
 void Tracers::
-reset() {
-    for (int t = 0; t < numTracer(); ++t) {
-        _masses[t] = 0;
-        _densities[t] = 0;
-        _tendencies[t] = 0;
-    }
-} // reset
+resetDensities() {
+    _densities.fill(0);
+} // resetDensities
+
+void Tracers::
+resetTendencies() {
+    _tendencies.fill(0);
+} // resetTendencies
 
 } // lasm

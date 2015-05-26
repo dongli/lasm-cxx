@@ -4,7 +4,6 @@
 
 DeformationTest::
 DeformationTest() {
-    subcase = "case4";
     period = 5;
     _stepSize = period/600;
     _endTime = _startTime+period;
@@ -18,6 +17,8 @@ DeformationTest::
 
 void DeformationTest::
 init(const ConfigManager &configManager, AdvectionManager &advectionManager) {
+    subcase = configManager.getValue("test_case", "subcase",
+                                     std::string("case4"));
     // Create domain and mesh objects.
     _domain = new Domain(2);
     _domain->radius() = 1;
@@ -30,7 +31,10 @@ init(const ConfigManager &configManager, AdvectionManager &advectionManager) {
     _stepSize = configManager.getValue("test_case", "time_step_size_in_seconds", _stepSize);
     _timeManager.init(_startTime, _endTime, _stepSize);
     // Initialize IO manager.
-    std::string outputPattern = configManager.getValue<std::string>("test_case", "output_pattern");
+    std::string outputPattern = "lasm.deform."+subcase+"."+
+        boost::lexical_cast<std::string>(numLon)+"x"+
+        boost::lexical_cast<std::string>(numLat)+".%5s.nc";
+    outputPattern = configManager.getValue("test_case", "output_pattern", outputPattern);
     TimeStepUnit freqUnit = geomtk::timeStepUnitFromString(configManager.getValue<std::string>("test_case", "output_frequency_unit"));
     int freq = configManager.getValue<int>("test_case", "output_frequency");
     io.init(_timeManager);

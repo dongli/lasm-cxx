@@ -2,17 +2,11 @@
 
 using namespace lasm;
 
-int main(int argc, char const *argv[])
-{
-    if (argc != 2) {
-        REPORT_ERROR("Configure file path is needed!");
-    }
-    ConfigManager configManager;
-    Cartesian3DTest test;
+template <class TestType>
+void run(const ConfigManager &configManager) {
+    TestType test;
     AdvectionManager advectionManager;
     TimeLevelIndex<2> oldIdx, newIdx;
-
-    configManager.parse(argv[1]);
 
     test.init(configManager, advectionManager);
     test.setInitialCondition(advectionManager);
@@ -24,5 +18,23 @@ int main(int argc, char const *argv[])
         test.output(newIdx, advectionManager);
         oldIdx.shift();
     }
+}
+
+int main(int argc, char const *argv[])
+{
+    if (argc != 2) {
+        REPORT_ERROR("Configure file path is needed!");
+    }
+    ConfigManager configManager;
+
+    configManager.parse(argv[1]);
+
+    std::string caseName = configManager.getValue<std::string>("test_case", "case_name");
+    if (caseName == "deform") {
+        run<DeformationTest>(configManager);
+    } else if (caseName == "terminator_chemistry") {
+        run<TerminatorChemistryTest>(configManager);
+    }
+
     return 0;
 }

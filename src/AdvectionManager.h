@@ -91,10 +91,13 @@ protected:
     mixParcels(const TimeLevelIndex<2> &timeIdx);
 
     void
-    remapFromParcelsToGrids(const TimeLevelIndex<2> &timeIdx);
+    remapDensityFromParcelsToGrids(const TimeLevelIndex<2> &timeIdx);
 
     void
-    remapFromGridsToParcels(const TimeLevelIndex<2> &timeIdx);
+    remapDensityFromGridsToParcels(const TimeLevelIndex<2> &timeIdx);
+
+    void
+    remapTendencyFromGridsToParcels(const TimeLevelIndex<2> &timeIdx);
 
     vector<Parcel*>
     getNeighborParcels(Parcel *parcel) const;

@@ -228,9 +228,14 @@ resetConnectedCells() {
 } // resetConnectedCells
 
 void Parcel::
-dump(const TimeLevelIndex<2> &timeIdx,
-     const MeshAdaptor &meshAdaptor) const {
-    std::ofstream file; file.open("parcel_dump.txt");
+dump(const TimeLevelIndex<2> &timeIdx, const MeshAdaptor &meshAdaptor,
+     const char *fileName) const {
+    std::ofstream file;
+    if (fileName) {
+        file.open(fileName);
+    } else {
+        file.open("parcel_dump.txt");
+    }
     // Parcel centroid.
     file << "centroid = (/" << x(timeIdx)(0)/RAD << ",";
     file << x(timeIdx)(1)/RAD << "/)" << endl;

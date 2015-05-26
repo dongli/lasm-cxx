@@ -55,7 +55,6 @@ begin
     res@cnConstFEnableFill = True
     res@cnConstFLabelOn = False
     res@cnLevelSelectionMode = "ManualLevels"
-    res@cnConstFEnableFill = True
     if (isStrSubset(test_case, "rotation")) then
         res@cnMinLevelValF = 0.0
         res@cnMaxLevelValF = 1000.0
@@ -106,16 +105,16 @@ begin
         res@gsnSpreadColorStart = 10
         res@gsnSpreadColorEnd = -4
         res@cnLevelSelectionMode = "ExplicitLevels"
-        if (ic .eq. "cl") then
-            res@gsnLeftString = "Cl"
+        if (ic .eq. "X") then
+            res@gsnLeftString = "X"
             res@cnLevels = (/-1e-7, -1e-8, 1e-8, 1e-7, 1e-6, 2e-6, 3e-6, 3.9e-6, 3.99e-6, 4.01e-6, 4.1e-6/)
         end if
-        if (ic .eq. "cl2") then
-            res@gsnLeftString = "2*Cl2"
+        if (ic .eq. "X2") then
+            res@gsnLeftString = "2*X2"
             res@cnLevels = (/-1e-7, -1e-8, 1e-8, 1e-7, 1e-6, 2e-6, 3e-6, 3.9e-6, 3.99e-6, 4.01e-6, 4.1e-6/)
         end if
-        if (ic .eq. "cly") then
-            res@gsnLeftString = "Cly = Cl + 2*Cl2"
+        if (ic .eq. "Xt") then
+            res@gsnLeftString = "Xt = X + 2*X2"
             res@cnLevels = (/3.e-6,  3.7e-6, 3.9e-6, 3.97e-6, 3.99e-6, 4.01e-6, 4.03e-6, 4.1e-6, 4.3e-6, 5e-6 /)
         end if
         res@lbLabelStrings  = sprintf("%4.2fe-6", 1e6*res@cnLevels)
@@ -232,13 +231,13 @@ begin
         if (isStrSubset(test_case, "terminator_chemistry")) then
             q = f->q1/f->q0
             copy_VarCoords(f->q0, q)
-            plot0 = plot_cell(wks, test_case, "cl", f->time, q)
+            plot0 = plot_cell(wks, test_case, "X", f->time, q)
             q = 2*f->q2/f->q0
             copy_VarCoords(f->q0, q)
-            plot1 = plot_cell(wks, test_case, "cl2", f->time, q)
+            plot1 = plot_cell(wks, test_case, "X2", f->time, q)
             q = (f->q1+2*f->q2)/f->q0
             copy_VarCoords(f->q0, q)
-            plot2 = plot_cell(wks, test_case, "cly", f->time, q)
+            plot2 = plot_cell(wks, test_case, "Xt", f->time, q)
 
             gsn_panel(wks, (/plot0,plot1,plot2/), (/3,1/), False)
         else

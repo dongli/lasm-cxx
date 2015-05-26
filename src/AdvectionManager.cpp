@@ -20,9 +20,14 @@ AdvectionManager::
 
 void AdvectionManager::
 init(const ConfigManager &configManager, const Mesh &mesh) {
+    // Read in parameters.
     filamentLimit = configManager.getValue("lasm", "filament_limit", 5.0);
-    minBiasLimit = configManager.getValue("lasm", "min_bias_limit", 0.1);
-    maxBiasLimit = configManager.getValue("lasm", "max_bias_limit", 0.5);
+    minBiasLimit  = configManager.getValue("lasm", "min_bias_limit", 0.1);
+    maxBiasLimit  = configManager.getValue("lasm", "max_bias_limit", 0.5);
+    radialMixing  = configManager.getValue("lasm", "radial_mixing",  1.0);
+    lateralMixing = configManager.getValue("lasm", "lateral_mixing", 1000.0);
+    restoreFactor = configManager.getValue("lasm", "restore_factor", 0.001);
+    // Record domain and mesh.
     domain = &mesh.domain();
     this->mesh = &mesh;
     // Initialize objects.
@@ -77,7 +82,7 @@ void AdvectionManager::
 advance(double dt, const TimeLevelIndex<2> &newIdx, const VelocityField &velocityField) {
     integrate(dt, newIdx, velocityField);
     connectParcelsAndGrids(newIdx);
-    remapFromParcelsToGrids(newIdx);
+    remapDensityFromParcelsToGrids(newIdx);
     mixParcels(newIdx);
 } // advance
 
@@ -89,23 +94,21 @@ input(const TimeLevelIndex<2> &timeIdx, double *q) {
     for (int t = 0; t < Tracers::numTracer(); ++t) {
         for (uword i = 0; i < mesh->totalNumGrid(CENTER); ++i) {
             meshAdaptor.density(timeIdx, t, i) = q[l++];
-        }
-        // Set parcel mass and density as the ones in mesh cell.
-        for (auto parcel : parcelManager.parcels()) {
-            int i = parcel->hostCellIndex();
-            parcel->tracers().mass(t) = meshAdaptor.mass(timeIdx, t, i);
-            parcel->tracers().density(t) = meshAdaptor.density(timeIdx, t, parcel->id());
-            Tracers::totalMass(t) += parcel->tracers().mass(t);
+            Tracers::totalMass(t) += meshAdaptor.mass(timeIdx, t, i);
         }
     }
-    remapFromParcelsToGrids(timeIdx);
+    remapDensityFromGridsToParcels(timeIdx);
+    remapDensityFromParcelsToGrids(timeIdx);
 } // input
 
 void AdvectionManager::
 output(const TimeLevelIndex<2> &timeIdx, int ncId) const {
     // Append global attributes.
     nc_redef(ncId);
-    nc_put_att(ncId, NC_GLOBAL, "radial_mixing", NC_DOUBLE, 1, &radialMixing);
+    nc_put_att(ncId, NC_GLOBAL, "filament_limit", NC_DOUBLE, 1, &filamentLimit);
+    nc_put_att(ncId, NC_GLOBAL, "min_bias_limit", NC_DOUBLE, 1, &minBiasLimit);
+    nc_put_att(ncId, NC_GLOBAL, "max_bias_limit", NC_DOUBLE, 1, &maxBiasLimit);
+    nc_put_att(ncId, NC_GLOBAL, "radial_mixing",  NC_DOUBLE, 1, &radialMixing);
     nc_put_att(ncId, NC_GLOBAL, "lateral_mixing", NC_DOUBLE, 1, &lateralMixing);
     nc_put_att(ncId, NC_GLOBAL, "restore_factor", NC_DOUBLE, 1, &restoreFactor);
 
@@ -235,7 +238,7 @@ void AdvectionManager::
 connectParcelAndGrids(const TimeLevelIndex<2> &timeIdx, Parcel *parcel) {
     meshAdaptor.containParcel(parcel->meshIndex(timeIdx).cellIndex(*mesh, CENTER), parcel);
     parcel->updateShapeSize(timeIdx);
-    double longAxisSize = parcel->shapeSize(timeIdx)[0];
+    double longAxisSize = 1.5*parcel->shapeSize(timeIdx)[0];
     SearchType search(gridTree, NULL, gridCoords, parcel->x(timeIdx).cartCoord(), true);
     mlpack::math::Range r(0, longAxisSize);
     vector<vector<size_t> > neighbors;
@@ -247,7 +250,7 @@ connectParcelAndGrids(const TimeLevelIndex<2> &timeIdx, Parcel *parcel) {
         const SpaceCoord &x = meshAdaptor.coord(cellIdx);
         parcel->calcBodyCoord(timeIdx, x, y);
         // NOTE: Increase influence radius of parcel to avoid fluctuation.
-        y() *= 0.5;
+        y() *= 0.6667;
         double w = parcel->shapeFunction(timeIdx, y);
         if (w == 0) continue;
         meshAdaptor.connectParcel(cellIdx, parcel, w);
@@ -361,7 +364,7 @@ mixParcels(const TimeLevelIndex<2> &timeIdx) {
         // Restore tracer density to mean density.
         double newTotalMass[Tracers::numTracer()];
         for (int t = 0; t < Tracers::numTracer(); ++t) {
-            double rho = parcel->tracers().density(t);
+            double &rho = parcel->tracers().density(t);
             rho += restoreFactor*(weightedMeanDensity[t]-rho);
             parcel->tracers().mass(t) = rho*parcel->volume(timeIdx);
             newTotalMass[t] = parcel->tracers().mass(t);
@@ -370,7 +373,7 @@ mixParcels(const TimeLevelIndex<2> &timeIdx) {
             if (weights[i] == 0) continue;
             double c = restoreFactor*weights[i];
             for (int t = 0; t < Tracers::numTracer(); ++t) {
-                double rho = neighborParcels[i]->tracers().density(t);
+                double &rho = neighborParcels[i]->tracers().density(t);
                 rho += c*(weightedMeanDensity[t]-rho);
                 neighborParcels[i]->tracers().mass(t) = rho*neighborParcels[i]->volume(timeIdx);
                 newTotalMass[t] += neighborParcels[i]->tracers().mass(t);
@@ -415,7 +418,7 @@ mixParcels(const TimeLevelIndex<2> &timeIdx) {
 } // mixParcels
 
 void AdvectionManager::
-remapFromParcelsToGrids(const TimeLevelIndex<2> &timeIdx) {
+remapDensityFromParcelsToGrids(const TimeLevelIndex<2> &timeIdx) {
     meshAdaptor.resetTracers(timeIdx);
     vector<int> voidCellIdxs;
     for (uword i = 0; i < gridCoords.n_cols; ++i) {
@@ -507,25 +510,65 @@ remapFromParcelsToGrids(const TimeLevelIndex<2> &timeIdx) {
             meshAdaptor.density(timeIdx, t, i) *= scale[t];
         }
     }
-} // remapFromParcelsToGrids
+} // remapDensityFromParcelsToGrids
 
 void AdvectionManager::
-remapFromGridsToParcels(const TimeLevelIndex<2> &timeIdx) {
-    parcelManager.resetTracers(timeIdx);
-    for (uword i = 0; i < mesh->totalNumGrid(CENTER); ++i) {
+remapDensityFromGridsToParcels(const TimeLevelIndex<2> &timeIdx) {
+    parcelManager.resetDensities();
+    for (auto parcel : parcelManager.parcels()) {
         double totalWeight = 0;
-        for (uword j = 0; j < meshAdaptor.numConnectedParcel(i); ++j) {
-            totalWeight += meshAdaptor.remapWeight(i, meshAdaptor.connectedParcels(i)[j]);
+        for (uword i = 0; i < parcel->numConnectedCell(); ++i) {
+            int cellIdx = parcel->connectedCellIndexs()[i];
+            totalWeight += meshAdaptor.remapWeight(cellIdx, parcel);
         }
-        for (uword j = 0; j < meshAdaptor.numConnectedParcel(i); ++j) {
-            Parcel *parcel = meshAdaptor.connectedParcels(i)[j];
-            double weight = meshAdaptor.remapWeight(i, parcel)/totalWeight;
+        for (uword i = 0; i < parcel->numConnectedCell(); ++i) {
+            int cellIdx = parcel->connectedCellIndexs()[i];
+            double weight = meshAdaptor.remapWeight(cellIdx, parcel)/totalWeight;
             for (int t = 0; t < Tracers::numTracer(); ++t) {
-                parcel->tracers().mass(t) += meshAdaptor.mass(timeIdx, t, i)*weight;
+                parcel->tracers().density(t) += meshAdaptor.density(timeIdx, t, cellIdx)*weight;
+            }
+        }
+        for (int t = 0; t < Tracers::numTracer(); ++t) {
+            parcel->tracers().mass(t) = parcel->tracers().density(t)*parcel->volume(timeIdx);
+        }
+    }
+    // Correct the total mass on the parcels.
+    vec scale(Tracers::numTracer(), arma::fill::zeros);
+    for (auto parcel : parcelManager.parcels()) {
+        for (int t = 0; t < Tracers::numTracer(); ++t) {
+            scale[t] += parcel->tracers().mass(t);
+        }
+    }
+    scale = Tracers::totalMasses()/scale;
+    for (auto parcel : parcelManager.parcels()) {
+        for (int t = 0; t < Tracers::numTracer(); ++t) {
+            parcel->tracers().mass(t) *= scale[t];
+        }
+        // Reset the parcel volume, because we would like to respect the density.
+        parcel->volume(timeIdx) = parcel->tracers().mass(0)/parcel->tracers().density(0);
+        parcel->updateDeformMatrix(timeIdx);
+        parcel->resetSkeletonPoints(timeIdx, *mesh);
+    }
+} // remapDensityFromGridsToParcels
+
+void AdvectionManager::
+remapTendencyFromGridsToParcels(const TimeLevelIndex<2> &timeIdx) {
+    parcelManager.resetTendencies();
+    for (uword i = 0; i < gridCoords.n_cols; ++i) {
+        int cellIdx = meshAdaptor.cellIndex(i);
+        double totalWeight = 0;
+        for (uword j = 0; j < meshAdaptor.numConnectedParcel(cellIdx); ++j) {
+            totalWeight += meshAdaptor.remapWeight(cellIdx, j);
+        }
+        for (uword j = 0; j < meshAdaptor.numConnectedParcel(cellIdx); ++j) {
+            Parcel *parcel = meshAdaptor.connectedParcels(cellIdx)[j];
+            double weight = meshAdaptor.remapWeight(cellIdx, parcel)/totalWeight;
+            for (int t = 0; t < Tracers::numTracer(); ++t) {
+                parcel->tracers().tendency(t) += meshAdaptor.tendency(t, cellIdx)*weight;
             }
         }
     }
-} // remapFromGridsToParcels
+} // remapTendencyFromGridsToParcels
 
 vector<Parcel*> AdvectionManager::
 getNeighborParcels(Parcel *parcel) const {

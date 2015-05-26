@@ -24,24 +24,53 @@ void ParcelManager::
 init(const Mesh &mesh) {
     this->mesh = &mesh;
     TimeLevelIndex<2> timeIdx;
+#ifdef LASM_USE_RLL_MESH
+    vec areas(mesh.numGrid(1, FULL));
+    vec areaWeights(mesh.numGrid(1, FULL));
+    for (uword j = mesh.js(FULL); j <= mesh.je(FULL); ++j) {
+        int cellIdx = mesh.wrapIndex(CENTER, mesh.is(FULL), j, mesh.ks(FULL));
+        areas[j] = mesh.cellVolume(cellIdx);
+        areaWeights[j] = exp(-0.1*fabs(mesh.sinLat(FULL, j)));
+    }
+    double maxArea = areas.max();
+    SpaceCoord x(mesh.domain().numDim());
+    int id = 0;
+    vec size(mesh.domain().numDim());
+    for (uword k = mesh.ks(FULL); k <= mesh.ke(FULL); ++k) {
+        if (mesh.domain().numDim() == 3) {
+            size[2] = mesh.gridInterval(2, HALF, k);
+        }
+        for (uword j = mesh.js(FULL)+1; j < mesh.je(FULL); ++j) {
+            size[1] = mesh.gridInterval(1, HALF, j)*mesh.domain().radius();
+            int numReducedLon = mesh.numGrid(0, FULL)/
+                std::max(1, static_cast<int>(maxArea*areaWeights[j]/areas[j]));
+            double dlon = PI2/numReducedLon;
+            for (uword i = 0; i < numReducedLon; ++i) {
+                double lon = i*dlon;
+                if (mesh.domain().numDim() == 2) {
+                    x.set(lon, mesh.lat(FULL, j));
+                } else if (mesh.domain().numDim() == 3) {
+                    x.set(lon, mesh.lat(FULL, j), mesh.lev(FULL, k));
+                }
+                x.transformToCart(mesh.domain());
+                size[0] = dlon*mesh.domain().radius()*mesh.cosLat(FULL, j);
+                Parcel *parcel = new Parcel;
+                parcel->init(id++);
+                parcel->x(timeIdx) = x;
+                parcel->meshIndex(timeIdx).locate(mesh, x);
+                parcel->skeletonPoints().init(mesh, size);
+                parcel->updateDeformMatrix(timeIdx);
+                parcel->tracers().init();
+                _parcels.push_back(parcel);
+            }
+        }
+    }
+#else
     for (uword i = 0; i < mesh.totalNumGrid(CENTER, mesh.domain().numDim()); ++i) {
         const SpaceCoord &x = mesh.gridCoord(CENTER, i);
         Parcel *parcel = new Parcel;
         parcel->init(i);
         parcel->x(timeIdx) = x;
-#ifdef LASM_USE_RLL_MESH
-        // In regular lat-lon mesh, there are whole zonal grids located on the
-        // Poles. This will cause many computational problems, so we just use
-        // the first grid to represent others.
-        auto spanIdx = mesh.unwrapIndex(CENTER, i);
-        if (spanIdx[1] == mesh.js(FULL)) {
-            double lat = parcel->x(timeIdx)(1)+mesh.gridInterval(1, FULL, mesh.js(FULL))*0.5;
-            parcel->x(timeIdx).setComp(1, lat);
-        } else if (spanIdx[1] == mesh.je(FULL)) {
-            double lat = parcel->x(timeIdx)(1)-mesh.gridInterval(1, FULL, mesh.je(FULL)-1)*0.5;
-            parcel->x(timeIdx).setComp(1, lat);
-        }
-#endif
         parcel->meshIndex(timeIdx).locate(mesh, x);
         auto cellSize = mesh.cellSize(CENTER, i);
         parcel->skeletonPoints().init(mesh, cellSize);
@@ -51,6 +80,7 @@ init(const Mesh &mesh) {
         parcel->tracers().init();
         _parcels.push_back(parcel);
     }
+#endif
 } // init
 
 void ParcelManager::
@@ -177,10 +207,17 @@ output(const TimeLevelIndex<2> &timeIdx, int ncId) const {
 } // output
 
 void ParcelManager::
-resetTracers(const TimeLevelIndex<2> &timeIdx) {
+resetDensities() {
     for (auto parcel : _parcels) {
-        parcel->tracers().reset();
+        parcel->tracers().resetDensities();
     }
-} // output
+} // resetDensities
+
+void ParcelManager::
+resetTendencies() {
+    for (auto parcel : _parcels) {
+        parcel->tracers().resetTendencies();
+    }
+} // resetTendencies
 
 } // lasm

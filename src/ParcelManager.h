@@ -29,7 +29,10 @@ public:
     addTracer();
 
     void
-    resetTracers(const TimeLevelIndex<2> &timeIdx);
+    resetDensities();
+
+    void
+    resetTendencies();
 }; // ParcelManager
 
 } // lasm

@@ -91,7 +91,10 @@ public:
     add();
 
     void
-    reset();
+    resetDensities();
+
+    void
+    resetTendencies();
 }; // Tracers
 
 } // lasm

@@ -182,8 +182,8 @@ public:
     }
 
     void
-    dump(const TimeLevelIndex<2> &timeIdx,
-         const MeshAdaptor &meshAdaptor) const;
+    dump(const TimeLevelIndex<2> &timeIdx, const MeshAdaptor &meshAdaptor,
+         const char *fileName = NULL) const;
 }; // Parcel
 
 } // lasm

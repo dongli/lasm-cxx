@@ -102,7 +102,8 @@ public:
         return _numConnectedParcel[cellIdx];
     }
 
-    const vector<Parcel*>& connectedParcels(int cellIdx) const {
+    const vector<Parcel*>&
+    connectedParcels(int cellIdx) const {
         return _connectedParcels[cellIdx];
     }
 
