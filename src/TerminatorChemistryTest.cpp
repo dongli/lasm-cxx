@@ -1,10 +1,10 @@
+#ifdef LASM_IN_SPHERE
+
 #include "TerminatorChemistryTest.h"
 
 #include "AdvectionManager.h"
 #include "Parcel.h"
 #include "Tracers.h"
-
-#ifdef LASM_IN_SPHERE
 
 TerminatorChemistryTest::
 TerminatorChemistryTest() {

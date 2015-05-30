@@ -10,7 +10,7 @@
 #include "AdvectionManager.h"
 
 // TODO: Move this class to GEOMTK.
-#include "Cartesian3DTest.h"
+#include "DataTest.h"
 #include "DeformationTest.h"
 #include "TerminatorChemistryTest.h"
 

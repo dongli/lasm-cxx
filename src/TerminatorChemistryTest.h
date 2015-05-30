@@ -1,6 +1,8 @@
 #ifndef __LASM_TerminatorChemistryTest__
 #define __LASM_TerminatorChemistryTest__
 
+#ifdef LASM_IN_SPHERE
+
 #include "DeformationTest.h"
 
 class TerminatorChemistryTest : public DeformationTest {
@@ -32,5 +34,7 @@ protected:
     calcTendency(const SpaceCoord &x, double X, double X2,
                  double &dX, double &dX2);
 }; // TerminatorChemistryTest
+
+#endif // LASM_IN_SPHERE
 
 #endif // __LASM_TerminatorChemistryTest__

@@ -227,8 +227,12 @@ integrate(double dt, const TimeLevelIndex<2> &newIdx,
         for (auto parcel : parcelManager.parcels()) {
             totalVolume += parcel->volume(newIdx);
         }
-        double sphereArea = 4*PI*pow(domain->radius(), 2);
-        double error = (totalVolume-sphereArea)/sphereArea;
+#ifdef LASM_IN_SPHERE
+        double trueTotalVolume = 4*PI*pow(domain->radius(), 2);
+#elif defined LASM_IN_CARTESIAN
+        double trueTotalVolume = totalVolume;
+#endif
+        double error = (totalVolume-trueTotalVolume)/trueTotalVolume;
         assert(fabs(error) < 1.0e-12);
     }
 #endif

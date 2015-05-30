@@ -1,6 +1,6 @@
-#include "DeformationTest.h"
-
 #ifdef LASM_IN_SPHERE
+
+#include "DeformationTest.h"
 
 DeformationTest::
 DeformationTest() {

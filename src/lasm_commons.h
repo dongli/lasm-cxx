@@ -2,8 +2,9 @@
 #define __LASM_commons__
 
 #define LASM_TENDENCY_ON_PARCEL
-#define LASM_IN_SPHERE
-#define LASM_USE_RLL_MESH
+#define LASM_IN_CARTESIAN
+//#define LASM_IN_SPHERE
+//#define LASM_USE_RLL_MESH
 
 #if defined LASM_IN_CARTESIAN
 #include "geomtk/Cartesian.h"

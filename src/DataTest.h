@@ -1,19 +1,19 @@
-#ifndef __LASM_Cartesian3DTest__
-#define __LASM_Cartesian3DTest__
+#ifndef __LASM_DataTest__
+#define __LASM_DataTest__
 
 #include "lasm_commons.h"
 
 // TODO: Move this class to GEOMTK.
 
-class Cartesian3DTest
+class DataTest
 : public geomtk::AdvectionTestInterface<2, Domain, Mesh, Field, VelocityField, IOManager> {
     arma::uword dataIdx;
 public:
     typedef geomtk::AdvectionManagerInterface<2, Domain, Mesh, Field, VelocityField> AdvectionManager;
     typedef geomtk::AdvectionTestInterface<2, Domain, Mesh, Field, VelocityField, IOManager> Interface;
 
-    Cartesian3DTest();
-    virtual ~Cartesian3DTest();
+    DataTest();
+    virtual ~DataTest();
 
     virtual void
     init(const ConfigManager &configManager, AdvectionManager &advectionManager);
@@ -22,12 +22,11 @@ public:
     setInitialCondition(AdvectionManager &advectionManager);
 
     virtual void
-    advanceDynamics(const TimeLevelIndex<2> &timeIdx,
-                    AdvectionManager &advectionManager);
-
-    virtual void
     output(const TimeLevelIndex<2> &timeIdx,
            const AdvectionManager &advectionManager);
-}; // Cartesian3DTest
+protected:
+    virtual void
+    setVelocityField(const TimeLevelIndex<2> &timeIdx);
+}; // DataTest
 
-#endif // __LASM_Cartesian3DTest__
+#endif // __LASM_DataTest__

@@ -153,7 +153,9 @@ resetSkeletonPoints(const TimeLevelIndex<2> &timeIdx, const Mesh &mesh) {
     for (uword i = 0; i < x.size(); ++i) {
         calcSpaceCoord(timeIdx, y[i], x[i]);
         meshIndexs[i].reset();
-        meshIndexs[i].locate(mesh, x[i]);
+        if (mesh.domain().isValid(x[i])) {
+            meshIndexs[i].locate(mesh, x[i]);
+        }
     }
 } // resetSkeletonPoints
 

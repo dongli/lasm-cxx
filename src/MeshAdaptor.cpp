@@ -33,6 +33,11 @@ init(const Mesh &mesh) {
         }
         _cellIndexs[j++] = i;
     }
+#else
+    _cellIndexs.resize(mesh.totalNumGrid(CENTER));
+    for (uword i = 0; i < mesh.totalNumGrid(CENTER); ++i) {
+        _cellIndexs[i] = i;
+    }
 #endif
 } // init
 

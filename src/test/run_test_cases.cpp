@@ -31,9 +31,15 @@ int main(int argc, char const *argv[])
 
     std::string caseName = configManager.getValue<std::string>("test_case", "case_name");
     if (caseName == "deform") {
+#ifdef LASM_IN_SPHERE
         run<DeformationTest>(configManager);
+#endif
     } else if (caseName == "terminator_chemistry") {
+#ifdef LASM_IN_SPHERE
         run<TerminatorChemistryTest>(configManager);
+#endif
+    } else if (caseName.find("_data") != std::string::npos) {
+        run<DataTest>(configManager);
     }
 
     return 0;

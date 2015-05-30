@@ -56,6 +56,7 @@ init(const Mesh &mesh, const vec &sizes) {
             I.level(l)[i].init(domain->numDim());
         }
     }
+    const SpaceCoord &x0 = hostParcel->x(timeIdx);
 #if defined LASM_IN_CARTESIAN
     if (domain->numDim() == 2) {
         x.level(timeIdx)[0].set(x0(0)-sizes(0), x0(1));
@@ -71,7 +72,6 @@ init(const Mesh &mesh, const vec &sizes) {
         x.level(timeIdx)[5].set(x0(0), x0(1), x0(2)+sizes(2));
     }
 #elif defined LASM_IN_SPHERE
-    const SpaceCoord &x0 = hostParcel->x(timeIdx);
     if (domain->numDim() == 2) {
         domain->rotateBack(x0, x.level(timeIdx)[0], 0, PI*0.5-sizes(1)/domain->radius());
         domain->rotateBack(x0, x.level(timeIdx)[1], PI*0.5, PI*0.5-sizes(0)/domain->radius());

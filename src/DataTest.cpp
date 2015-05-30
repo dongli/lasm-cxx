@@ -1,55 +1,72 @@
-#include "Cartesian3DTest.h"
+#include "DataTest.h"
+#include <stdlib.h>
 
-Cartesian3DTest::
-Cartesian3DTest() {
+using namespace boost::xpressive;
+using namespace std;
+
+DataTest::
+DataTest() {
     REPORT_ONLINE;
 }
 
-Cartesian3DTest::
-~Cartesian3DTest() {
+DataTest::
+~DataTest() {
     REPORT_OFFLINE;
 }
 
-void Cartesian3DTest::
+void DataTest::
 init(const ConfigManager &configManager, AdvectionManager &advectionManager) {
-    // Create domain and mesh objects.
-    _domain = new Domain(3);
-    _mesh = new Mesh(*_domain);
     // Read in configuration.
-    std::string dataRoot = configManager.getValue<std::string>("test_case", "data_root");
-    std::string dataPattern = configManager.getValue<std::string>("test_case", "data_pattern");
-    std::string outputPattern = configManager.getValue<std::string>("test_case", "output_pattern");
-    TimeStepUnit freqUnit = geomtk::timeStepUnitFromString(configManager.getValue<std::string>("test_case", "output_frequency_unit"));
+    auto caseName = configManager.getValue<string>("test_case", "case_name");
+    auto dataRoot = configManager.getValue<string>("test_case", "data_root");
+    auto dataPattern = configManager.getValue<string>("test_case", "data_pattern");
+    auto outputPattern = configManager.getValue<string>("test_case", "output_pattern");
+    TimeStepUnit freqUnit = geomtk::timeStepUnitFromString(configManager.getValue<string>("test_case", "output_frequency_unit"));
     int freq = configManager.getValue<int>("test_case", "output_frequency");
-    // Initialize time manager.
-    _stepSize = io.file(dataIdx).getAttribute<float>("time_step_size_in_seconds");
+    auto domainType = configManager.getValue<string>("test_case", "domain_type");
+    // Create domain and mesh objects.
+    mark_tag tagDomainType(1), tagNumDomain(2);
+    sregex reDomainType = (tagDomainType= +_w) >> ' ' >> (tagNumDomain= +_d) >> "d";
+    smatch what;
+    if (!regex_match(domainType, what, reDomainType)) {
+        REPORT_ERROR("Invalid domain type attribute \"" << domainType << "\"!");
+    }
+    // Check if the domain type is matched.
+    if ((what[tagDomainType] == "Cartesian" && !is_same<Domain, geomtk::CartesianDomain>::value) ||
+        (what[tagDomainType] == "Sphere" && !is_same<Domain, geomtk::SphereDomain>::value)) {
+        REPORT_ERROR("Domain type is not matched!");
+    }
+    _domain = new Domain(atoi(what[tagNumDomain].str().c_str()));
+    _mesh = new Mesh(*_domain);
     // Initialize IO manager.
     io.init(_timeManager);
     dataIdx = io.addInputFile(*_mesh, dataRoot+"/"+dataPattern);
     outputIdx = io.addOutputFile(*_mesh, outputPattern, freqUnit, freq);
+    // Initialize time manager.
+    vector<string> filePaths = geomtk::SystemTools::getFilePaths(dataRoot, geomtk::StampString::wildcard(dataPattern));
+    _stepSize = io.file(dataIdx).getAttribute<float>("time_step_size_in_seconds");
+    _startTime = io.getTime(filePaths.front());
+    _endTime = io.getTime(filePaths.back());
+    _timeManager.init(_startTime, _endTime, _stepSize);
     // Read in domain from the first data.
     _domain->init(io.file(dataIdx).currentFilePath());
     // Read in mesh from the first data.
     _mesh->init(io.file(dataIdx).currentFilePath());
     // Initialize velocity field.
     velocityField.create(*_mesh, true, true);
-    io.file(dataIdx).addField("double", FULL_DIMENSION,
-                              {&velocityField(0),
-                               &velocityField(1),
-                               &velocityField(2)});
-    io.file(outputIdx).addField("double", FULL_DIMENSION,
-                                {&velocityField(0),
-                                 &velocityField(1),
-                                 &velocityField(2),
-                                 &velocityField.divergence()});
+    for (int m = 0; m < _domain->numDim(); ++m) {
+        io.file(dataIdx).addField("double", FULL_DIMENSION, {&velocityField(m)});
+        io.file(outputIdx).addField("double", FULL_DIMENSION, {&velocityField(m)});
+    }
+    io.file(outputIdx).addField("double", FULL_DIMENSION, {&velocityField.divergence()});
     // Initialize advection manager.
     advectionManager.init(configManager, *_mesh);
     // Initialize density fields for input and output.
     numTracer = io.file(dataIdx).getAttribute<int>("num_tracer");
     for (int t = 0; t < numTracer; ++t) {
-        std::string name = "q"+std::to_string(t);
-        std::string longName = io.file(dataIdx).getAttribute<std::string>(name, "long_name");
-        std::string units = io.file(dataIdx).getAttribute<std::string>(name, "units");
+        string name = "q"+to_string(t);
+        string longName = io.file(dataIdx).getAttribute<string>(name, "long_name");
+        string units = io.file(dataIdx).getAttribute<string>(name, "units");
         advectionManager.addTracer(name, units, longName);
         io.file(dataIdx).addField("double", FULL_DIMENSION,
                                   {&advectionManager.density(t)});
@@ -59,7 +76,7 @@ init(const ConfigManager &configManager, AdvectionManager &advectionManager) {
     }
 } // init
 
-void Cartesian3DTest::
+void DataTest::
 setInitialCondition(AdvectionManager &advectionManager) {
     TimeLevelIndex<2> timeIdx;
     io.open(dataIdx);
@@ -78,18 +95,16 @@ setInitialCondition(AdvectionManager &advectionManager) {
     io.close(dataIdx);
 } // setInitialCondition
 
-void Cartesian3DTest::
-advanceDynamics(const TimeLevelIndex<2> &timeIdx,
-                AdvectionManager &advectionManager) {
+void DataTest::
+setVelocityField(const TimeLevelIndex<2> &timeIdx) {
     io.open(dataIdx);
     io.input<double>(dataIdx, timeIdx, {&velocityField(0),
                                         &velocityField(1),
                                         &velocityField(2)});
     io.close(dataIdx);
-    Interface::advanceDynamics(timeIdx, advectionManager);
-} // advanceDynamics
+} // setVelocityField
 
-void Cartesian3DTest::
+void DataTest::
 output(const TimeLevelIndex<2> &timeIdx,
        const AdvectionManager &advectionManager) {
     io.create(outputIdx);
