@@ -22,6 +22,9 @@ public:
     init(const Domain &domain);
 
     void
+    init();
+
+    void
     init(const Mesh &mesh, const vec &sizes);
 
     static uword

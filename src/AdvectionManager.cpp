@@ -23,10 +23,12 @@ init(const ConfigManager &configManager, const Mesh &mesh) {
     // Read in parameters.
     filamentLimit = configManager.getValue("lasm", "filament_limit", 5.0);
     minBiasLimit  = configManager.getValue("lasm", "min_bias_limit", 0.1);
-    maxBiasLimit  = configManager.getValue("lasm", "max_bias_limit", 0.5);
+    maxBiasLimit  = configManager.getValue("lasm", "max_bias_limit", 0.1);
     radialMixing  = configManager.getValue("lasm", "radial_mixing",  1.0);
     lateralMixing = configManager.getValue("lasm", "lateral_mixing", 1000.0);
     restoreFactor = configManager.getValue("lasm", "restore_factor", 0.001);
+    reshapeFactor = configManager.getValue("lasm", "reshape_factor", 0.5);
+    connectScale  = configManager.getValue("lasm", "connect_scale",  1.5);
     // Record domain and mesh.
     domain = &mesh.domain();
     this->mesh = &mesh;
@@ -34,7 +36,7 @@ init(const ConfigManager &configManager, const Mesh &mesh) {
     ShapeFunction::init(*domain);
     QuadraturePoints::init(*domain);
     SkeletonPoints::init(*domain);
-    Parcel::init(*domain);
+    Parcel::init(mesh);
     Regrid::init(mesh);
     parcelManager.init(mesh);
     meshAdaptor.init(mesh);
@@ -67,6 +69,11 @@ init(const ConfigManager &configManager, const Mesh &mesh) {
     // Connect parcels and grids Initially.
     TimeLevelIndex<2> timeIdx;
     connectParcelsAndGrids(timeIdx);
+    refVolume = 0;
+    for (auto parcel : parcelManager.parcels()) {
+        refVolume += parcel->volume(timeIdx);
+    }
+    refVolume /= parcelManager.parcels().size();
 } // init
 
 void AdvectionManager::
@@ -84,6 +91,7 @@ advance(double dt, const TimeLevelIndex<2> &newIdx, const VelocityField &velocit
     connectParcelsAndGrids(newIdx);
     remapDensityFromParcelsToGrids(newIdx);
     mixParcels(newIdx);
+    statistics(newIdx);
 } // advance
 
 void AdvectionManager::
@@ -111,13 +119,41 @@ output(const TimeLevelIndex<2> &timeIdx, int ncId) const {
     nc_put_att(ncId, NC_GLOBAL, "radial_mixing",  NC_DOUBLE, 1, &radialMixing);
     nc_put_att(ncId, NC_GLOBAL, "lateral_mixing", NC_DOUBLE, 1, &lateralMixing);
     nc_put_att(ncId, NC_GLOBAL, "restore_factor", NC_DOUBLE, 1, &restoreFactor);
-
+    nc_put_att(ncId, NC_GLOBAL, "reshape_factor", NC_DOUBLE, 1, &reshapeFactor);
     string str = to_iso_extended_string(boost::gregorian::day_clock::universal_day());
     nc_put_att(ncId, NC_GLOBAL, "create_date", NC_CHAR, str.length(), str.c_str());
     nc_enddef(ncId);
     // Append tracer data.
     parcelManager.output(timeIdx, ncId);
 } // output
+
+void AdvectionManager::
+statistics(const TimeLevelIndex<2> &timeIdx) {
+    double minVolume = 1.0e33;
+    double maxVolume = -1.0e33;
+    double maxVolumeChange = -1.0e33;
+    double maxFilament = -1.0e33;
+    int maxFilamentParcelId;
+    for (auto parcel : parcelManager.parcels()) {
+        if (minVolume > parcel->volume(timeIdx)) minVolume = parcel->volume(timeIdx);
+        if (maxVolume < parcel->volume(timeIdx)) maxVolume = parcel->volume(timeIdx);
+        double dv = parcel->volume(timeIdx)-parcel->volume(timeIdx-1);
+        if (maxVolumeChange < dv) maxVolumeChange = dv;
+        if (maxFilament < parcel->filament()) {
+            maxFilament = parcel->filament();
+            maxFilamentParcelId = parcel->id();
+        }
+    }
+    cout << setw(120) << setfill('-') << "-" << setfill(' ') << endl;
+    cout << setw(30) << "minVolume";
+    cout << setw(30) << "maxVolume";
+    cout << setw(30) << "maxVolumeChange";
+    cout << setw(30) << "maxFilament" << endl;
+    cout << setw(30) << setprecision(10) << minVolume/refVolume;
+    cout << setw(30) << setprecision(10) << maxVolume/refVolume;
+    cout << setw(30) << setprecision(10) << maxVolumeChange/refVolume;
+    cout << setw(30) << setprecision(10) << maxFilament << " (" << maxFilamentParcelId << ")" << endl;
+} // statistics
 
 void AdvectionManager::
 integrate(double dt, const TimeLevelIndex<2> &newIdx,
@@ -154,6 +190,9 @@ integrate(double dt, const TimeLevelIndex<2> &newIdx,
         regrid.run(LINEAR, oldIdx, velocityField, x0, v1, &I0);
         regrid.run(LINEAR, oldIdx, divergence, x0, div, &I0);
         mesh->move(x0, dt05, v1, I0, x1);
+        if (!domain->isValid(x1)) {
+            REPORT_ERROR("Parcel moved out of the domain!");
+        }
         I1.locate(*mesh, x1);
         k1 = parcel->volume(oldIdx)*div;
         volume = parcel->volume(oldIdx)+dt05*k1;
@@ -161,6 +200,9 @@ integrate(double dt, const TimeLevelIndex<2> &newIdx,
         regrid.run(LINEAR, halfIdx, velocityField, x1, v2, &I1);
         regrid.run(LINEAR, halfIdx, divergence, x1, div, &I1);
         mesh->move(x0, dt05, v2, I0, x1);
+        if (!domain->isValid(x1)) {
+            REPORT_ERROR("Parcel moved out of the domain!");
+        }
         I1.locate(*mesh, x1);
         k2 = volume*div;
         volume = parcel->volume(oldIdx)+dt05*k2;
@@ -168,6 +210,9 @@ integrate(double dt, const TimeLevelIndex<2> &newIdx,
         regrid.run(LINEAR, halfIdx, velocityField, x1, v3, &I1);
         regrid.run(LINEAR, halfIdx, divergence, x1, div, &I1);
         mesh->move(x0, dt, v3, I0, x1);
+        if (!domain->isValid(x1)) {
+            REPORT_ERROR("Parcel moved out of the domain!");
+        }
         I1.locate(*mesh, x1);
         k3 = volume*div;
         volume = parcel->volume(oldIdx)+dt*k3;
@@ -176,6 +221,9 @@ integrate(double dt, const TimeLevelIndex<2> &newIdx,
         regrid.run(LINEAR, newIdx, divergence, x1, div, &I1);
         v = (v1+v2*2.0+v3*2.0+v4)/6.0;
         mesh->move(x0, dt, v, I0, x1);
+        if (!domain->isValid(x1)) {
+            REPORT_ERROR("Parcel moved out of the domain!");
+        }
         I1.locate(*mesh, x1);
         k4 = volume*div;
         parcel->updateVolume(newIdx, parcel->volume(oldIdx)+dt*(k1+2*k2+2*k3+k4)/6);
@@ -199,19 +247,35 @@ integrate(double dt, const TimeLevelIndex<2> &newIdx,
             // Stage 1.
             regrid.run(LINEAR, oldIdx, velocityField, xs0[i], v1, &Is0[i]);
             mesh->move(xs0[i], dt05, v1, Is0[i], xs1[i]);
+            if (!domain->isValid(xs1[i])) {
+                Is1[i].reset();
+                continue;
+            }
             Is1[i].locate(*mesh, xs1[i]);
             // Stage 2.
             regrid.run(LINEAR, halfIdx, velocityField, xs1[i], v2, &Is1[i]);
             mesh->move(xs0[i], dt05, v2, Is0[i], xs1[i]);
+            if (!domain->isValid(xs1[i])) {
+                Is1[i].reset();
+                continue;
+            }
             Is1[i].locate(*mesh, xs1[i]);
             // Stage 3.
             regrid.run(LINEAR, halfIdx, velocityField, xs1[i], v3, &Is1[i]);
             mesh->move(xs0[i], dt, v3, Is0[i], xs1[i]);
+            if (!domain->isValid(xs1[i])) {
+                Is1[i].reset();
+                continue;
+            }
             Is1[i].locate(*mesh, xs1[i]);
             // Stage 4.
             regrid.run(LINEAR, newIdx, velocityField, xs1[i], v4, &Is1[i]);
             v = (v1+v2*2.0+v3*2.0+v4)/6.0;
             mesh->move(xs0[i], dt, v, Is0[i], xs1[i]);
+            if (!domain->isValid(xs1[i])) {
+                Is1[i].reset();
+                continue;
+            }
             Is1[i].locate(*mesh, xs1[i]);
         }
         parcel->updateDeformMatrix(newIdx);
@@ -242,7 +306,7 @@ void AdvectionManager::
 connectParcelAndGrids(const TimeLevelIndex<2> &timeIdx, Parcel *parcel) {
     meshAdaptor.containParcel(parcel->meshIndex(timeIdx).cellIndex(*mesh, CENTER), parcel);
     parcel->updateShapeSize(timeIdx);
-    double longAxisSize = 1.5*parcel->shapeSize(timeIdx)[0];
+    double longAxisSize = connectScale*parcel->shapeSize(timeIdx)[0];
     SearchType search(gridTree, NULL, gridCoords, parcel->x(timeIdx).cartCoord(), true);
     mlpack::math::Range r(0, longAxisSize);
     vector<vector<size_t> > neighbors;
@@ -254,17 +318,23 @@ connectParcelAndGrids(const TimeLevelIndex<2> &timeIdx, Parcel *parcel) {
         const SpaceCoord &x = meshAdaptor.coord(cellIdx);
         parcel->calcBodyCoord(timeIdx, x, y);
         // NOTE: Increase influence radius of parcel to avoid fluctuation.
-        y() *= 0.6667;
+        y() /= connectScale;
         double w = parcel->shapeFunction(timeIdx, y);
         if (w == 0) continue;
         meshAdaptor.connectParcel(cellIdx, parcel, w);
         parcel->connectCell(cellIdx);
     }
+    meshAdaptor.connectParcel(parcel->hostCellIndex(), parcel, 1);
+    parcel->connectCell(parcel->hostCellIndex());
 } // connectParcelAndGrids
 
 void AdvectionManager::
 connectParcelsAndGrids(const TimeLevelIndex<2> &timeIdx) {
     meshAdaptor.resetConnectedAndContainedParcels();
+#ifdef LASM_USE_DIAG
+    Diagnostics::resetMetric<Field<int> >("ncp1");
+    Diagnostics::resetMetric<Field<int> >("ncp2");
+#endif
     for (auto parcel : parcelManager.parcels()) {
         parcel->resetConnectedCells();
         connectParcelAndGrids(timeIdx, parcel);
@@ -273,6 +343,12 @@ connectParcelsAndGrids(const TimeLevelIndex<2> &timeIdx) {
 
 void AdvectionManager::
 mixParcels(const TimeLevelIndex<2> &timeIdx) {
+#ifdef LASM_USE_DIAG
+    Diagnostics::resetMetric<Field<int> >("nmp");
+#endif
+    const int maxNumNeighborParcel = 1000;
+    int numNeighborParcel;
+    Parcel *neighborParcels[maxNumNeighborParcel];
     for (auto parcel : parcelManager.parcels()) {
         // Check the validity of the linear assumption.
         field<SpaceCoord> &x = parcel->skeletonPoints().spaceCoords(timeIdx);
@@ -284,25 +360,27 @@ mixParcels(const TimeLevelIndex<2> &timeIdx) {
             double bias0 = domain->calcDistance(x[i], X)/parcel->shapeSize(timeIdx).max();
             if (bias0 > bias) bias = bias0;
         }
-        vector<Parcel*> neighborParcels = getNeighborParcels(parcel);
         // Set the bias limit based on the filament of the parcel and its volume
-        // compared with the neighbor tracers.
-        double meanVolume = parcel->volume(timeIdx);
-        for (uword i = 0; i < neighborParcels.size(); ++i) {
-            meanVolume += neighborParcels[i]->volume(timeIdx);
-        }
-        meanVolume /= neighborParcels.size()+1;
-        double ratio = parcel->volume(timeIdx)/meanVolume;
-        double biasLimit = transitionFunction(1, maxBiasLimit, 5, minBiasLimit,
+        // compared with the reference volume.
+        double ratio = parcel->volume(timeIdx)/refVolume;
+        double biasLimit = transitionFunction(1, maxBiasLimit,
+                                              filamentLimit, minBiasLimit,
                                               ratio*parcel->filament());
         // Check parcel bias.
         bool isDegenerated = true;
         // TODO: Redesign the thresholds.
-        if (bias < biasLimit && parcel->filament() < filamentLimit) {
+        if (bias < biasLimit && parcel->filament() < filamentLimit &&
+            !parcel->meshIndex(timeIdx).atBoundary(*mesh)) {
             isDegenerated = false;
-#ifndef LASM_TEST_ALL_MIX
+#ifndef LASM_MAX_MIX
             continue;
 #endif
+        }
+        numNeighborParcel = getNeighborParcels(parcel, neighborParcels,
+                                               maxNumNeighborParcel);
+        if (numNeighborParcel == 0) {
+            parcel->dump(timeIdx, meshAdaptor);
+            REPORT_ERROR("Parcel " << parcel->id() << " has no neighbor!");
         }
         // Calcuate the mixing weights.
         vec x0(domain->numDim());
@@ -312,46 +390,52 @@ mixParcels(const TimeLevelIndex<2> &timeIdx) {
 #else
         x0 = parcel->longAxisVertexSpaceCoord()()-parcel->x(timeIdx)();
 #endif
-        double n0 = norm(x0, 2);
         vec x1(domain->numDim());
-        vec weights(neighborParcels.size(), arma::fill::zeros);
-        for (uword i = 0; i < neighborParcels.size(); ++i) {
+        vec weights(numNeighborParcel, arma::fill::zeros);
+        for (uword i = 0; i < numNeighborParcel; ++i) {
 #ifdef LASM_IN_SPHERE
             domain->project(geomtk::SphereDomain::STEREOGRAPHIC, parcel->x(timeIdx),
                             neighborParcels[i]->x(timeIdx), x1);
 #else
             x1 = domain->diffCoord(neighborParcels[i]->x(timeIdx), parcel->x(timeIdx));
 #endif
-            x1 /= n0;
-            double cosTheta = norm_dot(x0, x1);
-            // NOTE: Ensure cosTheta is in the range [-1,1]!
-            cosTheta = fmin(1, fmax(-1, cosTheta));
+            double cosTheta = fmin(1, fmax(-1, norm_dot(x0, x1)));
             double sinTheta = sqrt(1-cosTheta*cosTheta);
-            double n1 = norm(x1, 2);
-            double d1 = n1*cosTheta;
-            double d2 = n1*sinTheta;
-            weights[i] = exp(-(radialMixing*d1*d1+lateralMixing*d2*d2));
-            if (weights[i] < 1.0e-6) {
-                weights[i] = 0;
-            }
+            double n = norm(x1, 2);
+            double d1 = n*cosTheta;
+            double d2 = n*sinTheta;
+            weights[i] = radialMixing*d1*d1+lateralMixing*d2*d2;
+        }
+        weights /= max(weights);
+        for (uword i = 0; i < numNeighborParcel; ++i) {
+            weights[i] = exp(-10*weights[i]);
         }
         double sumWeights = sum(weights);
         if (sumWeights < 1.0e-14) {
+            for (uword i = 0; i < numNeighborParcel; ++i) {
+                cout << setw(20) << neighborParcels[i]->id() << setw(30) << setprecision(15) << weights[i] << endl;
+            }
+            parcel->dump(timeIdx, meshAdaptor);
+            cout << "Parcel " << parcel->id() << " failed to mix!" << endl;
+            exit(-1);
             continue;
         }
+#ifdef LASM_USE_DIAG
+        Diagnostics::metric<Field<int> >("nmp")(parcel->hostCellIndex())++;
+#endif
         weights /= sumWeights;
         // Caclulate total mass.
         double totalMass[Tracers::numTracer()];
         for (int t = 0; t < Tracers::numTracer(); ++t) {
             totalMass[t] = parcel->tracers().mass(t);
-            for (uword i = 0; i < neighborParcels.size(); ++i) {
+            for (uword i = 0; i < numNeighborParcel; ++i) {
                 if (weights[i] == 0) continue;
                 totalMass[t] += neighborParcels[i]->tracers().mass(t);
             }
         }
         // Caclulate weighted total volume.
         double weightedTotalVolume = parcel->volume(timeIdx);
-        for (uword i = 0; i < neighborParcels.size(); ++i) {
+        for (uword i = 0; i < numNeighborParcel; ++i) {
             if (weights[i] == 0) continue;
             weightedTotalVolume += neighborParcels[i]->volume(timeIdx)*weights[i];
         }
@@ -359,7 +443,7 @@ mixParcels(const TimeLevelIndex<2> &timeIdx) {
         double weightedMeanDensity[Tracers::numTracer()];
         for (int t = 0; t < Tracers::numTracer(); ++t) {
             weightedMeanDensity[t] = parcel->tracers().mass(t);
-            for (uword i = 0; i < neighborParcels.size(); ++i) {
+            for (uword i = 0; i < numNeighborParcel; ++i) {
                 if (weights[i] == 0) continue;
                 weightedMeanDensity[t] += neighborParcels[i]->tracers().mass(t)*weights[i];
             }
@@ -368,18 +452,16 @@ mixParcels(const TimeLevelIndex<2> &timeIdx) {
         // Restore tracer density to mean density.
         double newTotalMass[Tracers::numTracer()];
         for (int t = 0; t < Tracers::numTracer(); ++t) {
-            double &rho = parcel->tracers().density(t);
-            rho += restoreFactor*(weightedMeanDensity[t]-rho);
-            parcel->tracers().mass(t) = rho*parcel->volume(timeIdx);
+            parcel->tracers().density(t) += restoreFactor*(weightedMeanDensity[t]-parcel->tracers().density(t));
+            parcel->tracers().mass(t) = parcel->tracers().density(t)*parcel->volume(timeIdx);
             newTotalMass[t] = parcel->tracers().mass(t);
         }
-        for (uword i = 0; i < neighborParcels.size(); ++i) {
+        for (uword i = 0; i < numNeighborParcel; ++i) {
             if (weights[i] == 0) continue;
             double c = restoreFactor*weights[i];
             for (int t = 0; t < Tracers::numTracer(); ++t) {
-                double &rho = neighborParcels[i]->tracers().density(t);
-                rho += c*(weightedMeanDensity[t]-rho);
-                neighborParcels[i]->tracers().mass(t) = rho*neighborParcels[i]->volume(timeIdx);
+                neighborParcels[i]->tracers().density(t) += c*(weightedMeanDensity[t]-neighborParcels[i]->tracers().density(t));
+                neighborParcels[i]->tracers().mass(t) = neighborParcels[i]->tracers().density(t)*neighborParcels[i]->volume(timeIdx);
                 newTotalMass[t] += neighborParcels[i]->tracers().mass(t);
             }
         }
@@ -394,9 +476,19 @@ mixParcels(const TimeLevelIndex<2> &timeIdx) {
             }
             double fixer = totalMass[t]/newTotalMass[t];
             if (fixer == 1) continue;
+            if (fixer < 0.99) {
+                cout << numNeighborParcel << endl;
+                cout << setw(30) << setprecision(15) << totalMass[t] << endl;
+                cout << setw(30) << setprecision(15) << newTotalMass[t] << endl;
+                cout << setw(30) << setprecision(15) << weightedMeanDensity[t] << endl;
+                parcel->dump(timeIdx, meshAdaptor);
+                REPORT_ERROR("Mass error (" << fixer <<
+                             ") is too large when mixing parcels (" <<
+                             parcel->id() << ")!");
+            }
             parcel->tracers().mass(t) *= fixer;
             parcel->tracers().density(t) = parcel->tracers().mass(t)/parcel->volume(timeIdx);
-            for (uword i = 0; i < neighborParcels.size(); ++i) {
+            for (uword i = 0; i < numNeighborParcel; ++i) {
                 neighborParcels[i]->tracers().mass(t) *= fixer;
                 neighborParcels[i]->tracers().density(t) =
                     neighborParcels[i]->tracers().mass(t)/neighborParcels[i]->volume(timeIdx);
@@ -404,17 +496,31 @@ mixParcels(const TimeLevelIndex<2> &timeIdx) {
         }
         // Change problematic parcel shape (make parcel more uniform).
         if (!isDegenerated) continue;
-        const double maxUniformFactor = 0.5;
-        double a, b;
-        // TODO: Redesign the uniform factor.
-        double uniformFactor = transitionFunction(1, 1, 5, maxUniformFactor,
-                                                  parcel->filament());
-        a = pow(pow(uniformFactor, domain->numDim()-1), 1.0/domain->numDim());
-        b = 1/a;
         auto S = parcel->S();
-        S[0] *= a;
-        for (uword i = 1; i < domain->numDim(); ++i) {
-            S[i] *= b;
+        if (parcel->meshIndex(timeIdx).atBoundary(*mesh)) {
+            S.fill(pow(parcel->detH(timeIdx), 1.0/domain->numDim()));
+        } else {
+            double filament = parcel->filament();
+            double factor = -1;
+            while (filament > filamentLimit || factor == -1) {
+                factor = transitionFunction(1, 0, filamentLimit, reshapeFactor,
+                                            filament);
+                double a = sqrt(factor+(1-factor)/filament);
+                if (domain->numDim() == 2) {
+                    S[0] *= a;
+                    S[1] /= a;
+                } else if (domain->numDim() == 3) {
+                    double b = (S[0]-S[1])/(S[0]-S[2]);
+                    double S0 = S[0]*a;
+                    double S2 = S[2]/a;
+                    double S1 = S0-b*(S0-S2);
+                    double s = pow(parcel->volume(timeIdx)/(S0*S1*S2), 1.0/3.0);
+                    S[0] = S0*s;
+                    S[1] = S1*s;
+                    S[2] = S2*s;
+                }
+                filament = S[0]/S.min();
+            }
         }
         parcel->updateDeformMatrix(timeIdx, S);
         parcel->resetSkeletonPoints(timeIdx, *mesh);
@@ -574,28 +680,33 @@ remapTendencyFromGridsToParcels(const TimeLevelIndex<2> &timeIdx) {
     }
 } // remapTendencyFromGridsToParcels
 
-vector<Parcel*> AdvectionManager::
-getNeighborParcels(Parcel *parcel) const {
+int AdvectionManager::
+getNeighborParcels(Parcel *parcel, Parcel **neighborParcels,
+                   int maxNumNeighborParcel) const {
     const vector<int> &connectedCellIndexs = parcel->connectedCellIndexs();
-    vector<Parcel*> neighborParcels;
+    int numNeighborParcel = 0;
     for (uword i = 0; i < parcel->numConnectedCell(); ++i) {
         for (uword j = 0; j < meshAdaptor.numConnectedParcel(connectedCellIndexs[i]); ++j) {
             Parcel *parcel1 = meshAdaptor.connectedParcels(connectedCellIndexs[i])[j];
             bool alreadyAdded = false;
             if (parcel1 != parcel) {
-                for (uword k = 0; k < neighborParcels.size(); ++k) {
+                for (uword k = 0; k < numNeighborParcel; ++k) {
                     if (parcel1 == neighborParcels[k]) {
                         alreadyAdded = true;
                         break;
                     }
                 }
                 if (!alreadyAdded) {
-                    neighborParcels.push_back(parcel1);
+                    if (numNeighborParcel == maxNumNeighborParcel) {
+                        REPORT_ERROR("Exceed maximum number of neightbor parcels for parcel " << parcel->id() << "!");
+                    }
+                    neighborParcels[numNeighborParcel] = parcel1;
+                    numNeighborParcel++;
                 }
             }
         }
     }
-    return neighborParcels;
+    return numNeighborParcel;
 } // getNeighborParcels
 
 } // lasm

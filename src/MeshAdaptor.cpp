@@ -16,7 +16,7 @@ MeshAdaptor::
 
 void MeshAdaptor::
 init(const Mesh &mesh) {
-    this->mesh = &mesh;
+    _mesh = &mesh;
     _numConnectedParcel.resize(mesh.totalNumGrid(CENTER));
     _connectedParcels.resize(mesh.totalNumGrid(CENTER));
     _remapWeights.resize(mesh.totalNumGrid(CENTER));
@@ -45,16 +45,16 @@ void MeshAdaptor::
 addTracer(const string &name, const string &unit, const string &comment) {
     _densities.push_back(new Field<double, 2>);
     _densities.back()->create(name, unit, comment,
-                              *mesh, CENTER, mesh->domain().numDim());
+                              *_mesh, CENTER, _mesh->domain().numDim());
     _tendencies.push_back(new Field<double>);
     _tendencies.back()->create("d"+name, unit+" s-1", "mass tendency of "+comment,
-                               *mesh, CENTER, mesh->domain().numDim());
+                               *_mesh, CENTER, _mesh->domain().numDim());
 } // addTracer
 
 void MeshAdaptor::
 resetTracers(const TimeLevelIndex<2> &timeIdx) {
     for (uword t = 0; t < _densities.size(); ++t) {
-        for (uword i = 0; i < mesh->totalNumGrid(CENTER, mesh->domain().numDim()); ++i) {
+        for (uword i = 0; i < _mesh->totalNumGrid(CENTER, _mesh->domain().numDim()); ++i) {
             (*_densities[t])(timeIdx, i) = 0;
         }
     }
@@ -75,6 +75,9 @@ connectParcel(int cellIdx, Parcel *parcel, double weight) {
         _remapWeights[cellIdx][_numConnectedParcel[cellIdx]] = weight;
     }
     _numConnectedParcel[cellIdx]++;
+#ifdef LASM_USE_DIAG
+    Diagnostics::metric<Field<int> >("ncp2")(cellIdx)++;
+#endif
 } // connectParcel
 
 double MeshAdaptor::
@@ -114,11 +117,14 @@ containParcel(int cellIdx, Parcel *parcel) {
     }
     parcel->hostCellIndex() = cellIdx;
     _numContainedParcel[cellIdx]++;
+#ifdef LASM_USE_DIAG
+    Diagnostics::metric<Field<int> >("ncp1")(cellIdx)++;
+#endif
 } // containParcel
 
 void MeshAdaptor::
 resetConnectedAndContainedParcels() {
-    for (uword i = 0; i < mesh->totalNumGrid(CENTER, mesh->domain().numDim()); ++i) {
+    for (uword i = 0; i < _mesh->totalNumGrid(CENTER); ++i) {
         _numConnectedParcel[i] = 0;
         _numContainedParcel[i] = 0;
     }

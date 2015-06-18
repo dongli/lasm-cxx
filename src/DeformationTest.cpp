@@ -1,11 +1,13 @@
-#ifdef LASM_IN_SPHERE
-
 #include "DeformationTest.h"
+
+#ifdef LASM_IN_SPHERE
 
 DeformationTest::
 DeformationTest() {
     period = 5;
     _stepSize = period/600;
+    _startTime.month = 1;
+    _startTime.day = 1;
     _endTime = _startTime+period;
     REPORT_ONLINE;
 }
@@ -17,28 +19,35 @@ DeformationTest::
 
 void DeformationTest::
 init(const ConfigManager &configManager, AdvectionManager &advectionManager) {
-    subcase = configManager.getValue("test_case", "subcase",
+    subcase = configManager.getValue("deform", "subcase",
                                      std::string("case4"));
     // Create domain and mesh objects.
     _domain = new Domain(2);
     _domain->radius() = 1;
     _mesh = new Mesh(*_domain);
     // Initialize mesh.
-    int numLon = configManager.getValue("test_case", "num_lon", 240);
-    int numLat = configManager.getValue("test_case", "num_lat", 121);
+    int numLon = configManager.getValue("deform", "num_lon", 240);
+    int numLat = configManager.getValue("deform", "num_lat", 121);
     _mesh->init(numLon, numLat);
     // Initialize time manager.
-    _stepSize = configManager.getValue("test_case", "time_step_size_in_seconds", _stepSize);
+    _stepSize = configManager.getValue("deform", "time_step_size_in_seconds", _stepSize);
     _timeManager.init(_startTime, _endTime, _stepSize);
     // Initialize IO manager.
     std::string outputPattern = "lasm.deform."+subcase+"."+
         boost::lexical_cast<std::string>(numLon)+"x"+
         boost::lexical_cast<std::string>(numLat)+".%5s.nc";
-    outputPattern = configManager.getValue("test_case", "output_pattern", outputPattern);
-    TimeStepUnit freqUnit = geomtk::timeStepUnitFromString(configManager.getValue<std::string>("test_case", "output_frequency_unit"));
-    int freq = configManager.getValue<int>("test_case", "output_frequency");
+    outputPattern = configManager.getValue("deform", "output_pattern", outputPattern);
+    TimeStepUnit freqUnit = geomtk::timeStepUnitFromString(configManager.getValue<std::string>("deform", "output_frequency_unit"));
+    int freq = configManager.getValue<int>("deform", "output_frequency");
     io.init(_timeManager);
     outputIdx = io.addOutputFile(*_mesh, outputPattern, freqUnit, freq);
+#ifdef LASM_USE_DIAG
+    // Initialize diagnostics.
+    Diagnostics::init(*_mesh, io);
+    Diagnostics::addMetric<Field<int> >("nmp", "1", "mixed parcel number");
+    Diagnostics::addMetric<Field<int> >("ncp1", "1", "contained parcel number");
+    Diagnostics::addMetric<Field<int> >("ncp2", "1", "connected parcel number");
+#endif
     // Initialize velocity field.
     velocityField.create(*_mesh, true, UPDATE_HALF_LEVEL);
     io.file(outputIdx).addField("double", FULL_DIMENSION,

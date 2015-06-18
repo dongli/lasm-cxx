@@ -13,12 +13,16 @@ class AdvectionManager
     MeshAdaptor meshAdaptor;
     Regrid regrid;
 
-    double filamentLimit;   // control the filament degree
-    double minBiasLimit;    //
-    double maxBiasLimit;    //
-    double radialMixing;    // control the radial mixing degree
-    double lateralMixing;   // control the lateral mixing degree
-    double restoreFactor;   // control the base density restore degree
+    double filamentLimit;   // Control the filament degree.
+    double minBiasLimit;    // Control the more strict skeleton point bias.
+    double maxBiasLimit;    // Control the less strict skeleton point bias.
+    double radialMixing;    // Control the radial mixing degree.
+    double lateralMixing;   // Control the lateral mixing degree.
+    double restoreFactor;   // Control the base density restore degree.
+    double reshapeFactor;   // Control the parcel shape change after mix.
+    double connectScale;    // Control the parcel-grid connection scale.
+
+    double refVolume;       // Reference parcel volume.
 
     TreeType *gridTree;
     mat gridCoords;
@@ -78,6 +82,9 @@ public:
     }
 protected:
     void
+    statistics(const TimeLevelIndex<2> &timeIdx);
+
+    void
     integrate(double dt, const TimeLevelIndex<2> &newIdx,
               const VelocityField &velocityField);
     void
@@ -99,8 +106,9 @@ protected:
     void
     remapTendencyFromGridsToParcels(const TimeLevelIndex<2> &timeIdx);
 
-    vector<Parcel*>
-    getNeighborParcels(Parcel *parcel) const;
+    int
+    getNeighborParcels(Parcel *parcel, Parcel **neighborParcels,
+                       int maxNumNeighborParcel) const;
 };
 
 } // lasm

@@ -38,7 +38,7 @@ int main(int argc, char const *argv[])
 #ifdef LASM_IN_SPHERE
         run<TerminatorChemistryTest>(configManager);
 #endif
-    } else if (caseName.find("_data") != std::string::npos) {
+    } else if (caseName == "data") {
         run<DataTest>(configManager);
     }
 

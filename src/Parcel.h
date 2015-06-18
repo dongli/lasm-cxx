@@ -13,8 +13,9 @@ class Tracers;
 
 class Parcel {
 protected:
-    static const Domain *domain;
+    static const Mesh *mesh;
     int _id;
+    int _rank;
     TimeLevels<SpaceCoord, 2> _x;
     TimeLevels<mat, 2> _H;
     TimeLevels<double, 2> _detH;
@@ -39,6 +40,11 @@ public:
     int
     id() const {
         return _id;
+    }
+
+    int
+    rank() const {
+        return _rank;
     }
 
     const SpaceCoord&
@@ -132,16 +138,20 @@ public:
     }
 
     static void
-    init(const Domain &domain);
+    init(const Mesh &mesh);
 
     virtual void
-    init(int id);
+    init(int id, int rank);
 
     void
     updateDeformMatrix(const TimeLevelIndex<2> &timeIdx);
 
     void
     updateDeformMatrix(const TimeLevelIndex<2> &timeIdx, const vec &S);
+
+    void
+    updateDeformMatrix(const TimeLevelIndex<2> &timeIdx,
+                       const mat &U, const vec &S, const mat &V);
 
     void
     resetSkeletonPoints(const TimeLevelIndex<2> &timeIdx,

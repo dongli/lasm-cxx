@@ -17,13 +17,13 @@ DataTest::
 void DataTest::
 init(const ConfigManager &configManager, AdvectionManager &advectionManager) {
     // Read in configuration.
-    auto caseName = configManager.getValue<string>("test_case", "case_name");
-    auto dataRoot = configManager.getValue<string>("test_case", "data_root");
-    auto dataPattern = configManager.getValue<string>("test_case", "data_pattern");
-    auto outputPattern = configManager.getValue<string>("test_case", "output_pattern");
-    TimeStepUnit freqUnit = geomtk::timeStepUnitFromString(configManager.getValue<string>("test_case", "output_frequency_unit"));
-    int freq = configManager.getValue<int>("test_case", "output_frequency");
-    auto domainType = configManager.getValue<string>("test_case", "domain_type");
+    auto caseName = configManager.getValue<string>("data", "case_name");
+    auto dataRoot = configManager.getValue<string>("data", "data_root");
+    auto dataPattern = configManager.getValue<string>("data", "data_pattern");
+    auto outputPattern = configManager.getValue<string>("data", "output_pattern");
+    TimeStepUnit freqUnit = geomtk::timeStepUnitFromString(configManager.getValue<string>("data", "output_frequency_unit"));
+    int freq = configManager.getValue<int>("data", "output_frequency");
+    auto domainType = configManager.getValue<string>("data", "domain_type");
     // Create domain and mesh objects.
     mark_tag tagDomainType(1), tagNumDomain(2);
     sregex reDomainType = (tagDomainType= +_w) >> ' ' >> (tagNumDomain= +_d) >> "d";
@@ -44,9 +44,10 @@ init(const ConfigManager &configManager, AdvectionManager &advectionManager) {
     outputIdx = io.addOutputFile(*_mesh, outputPattern, freqUnit, freq);
     // Initialize time manager.
     vector<string> filePaths = geomtk::SystemTools::getFilePaths(dataRoot, geomtk::StampString::wildcard(dataPattern));
-    _stepSize = io.file(dataIdx).getAttribute<float>("time_step_size_in_seconds");
     _startTime = io.getTime(filePaths.front());
     _endTime = io.getTime(filePaths.back());
+    _stepSize = io.file(dataIdx).getAttribute<float>("time_step_size_in_seconds");
+    _stepSize = configManager.getValue("data", "time_step_size_in_seconds", _stepSize);
     _timeManager.init(_startTime, _endTime, _stepSize);
     // Read in domain from the first data.
     _domain->init(io.file(dataIdx).currentFilePath());
@@ -59,6 +60,13 @@ init(const ConfigManager &configManager, AdvectionManager &advectionManager) {
         io.file(outputIdx).addField("double", FULL_DIMENSION, {&velocityField(m)});
     }
     io.file(outputIdx).addField("double", FULL_DIMENSION, {&velocityField.divergence()});
+#ifdef LASM_USE_DIAG
+    // Initialize diagnostics.
+    Diagnostics::init(*_mesh, io);
+    Diagnostics::addMetric<Field<int> >("nmp", "1", "mixed parcel number");
+    Diagnostics::addMetric<Field<int> >("ncp1", "1", "contained parcel number");
+    Diagnostics::addMetric<Field<int> >("ncp2", "1", "connected parcel number");
+#endif
     // Initialize advection manager.
     advectionManager.init(configManager, *_mesh);
     // Initialize density fields for input and output.
@@ -71,8 +79,7 @@ init(const ConfigManager &configManager, AdvectionManager &advectionManager) {
         io.file(dataIdx).addField("double", FULL_DIMENSION,
                                   {&advectionManager.density(t)});
         io.file(outputIdx).addField("double", FULL_DIMENSION,
-                                    {&advectionManager.density(t),
-                                     &advectionManager.tendency(t)});
+                                    {&advectionManager.density(t)});
     }
 } // init
 
@@ -93,6 +100,7 @@ setInitialCondition(AdvectionManager &advectionManager) {
     }
     advectionManager.input(timeIdx, q);
     io.close(dataIdx);
+    setVelocityField(timeIdx);
 } // setInitialCondition
 
 void DataTest::
@@ -101,6 +109,11 @@ setVelocityField(const TimeLevelIndex<2> &timeIdx) {
     io.input<double>(dataIdx, timeIdx, {&velocityField(0),
                                         &velocityField(1),
                                         &velocityField(2)});
+    if (timeIdx.isCurrentIndex()) {
+        velocityField.applyBndCond(timeIdx);
+    } else {
+        velocityField.applyBndCond(timeIdx, UPDATE_HALF_LEVEL);
+    }
     io.close(dataIdx);
 } // setVelocityField
 
@@ -114,5 +127,9 @@ output(const TimeLevelIndex<2> &timeIdx,
     }
     io.output<double, 2>(outputIdx, timeIdx, {&velocityField(0),
         &velocityField(1),  &velocityField(2), &velocityField.divergence()});
+    if (io.isFileActive(outputIdx)) {
+        advectionManager.output(timeIdx, io.file(outputIdx).fileId);
+    }
     io.close(outputIdx);
+    Diagnostics::output();
 } // output

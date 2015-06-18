@@ -55,7 +55,7 @@ init(const Mesh &mesh) {
                 x.transformToCart(mesh.domain());
                 size[0] = dlon*mesh.domain().radius()*mesh.cosLat(FULL, j);
                 Parcel *parcel = new Parcel;
-                parcel->init(id++);
+                parcel->init(id++, 0);
                 parcel->x(timeIdx) = x;
                 parcel->meshIndex(timeIdx).locate(mesh, x);
                 parcel->skeletonPoints().init(mesh, size);
@@ -69,7 +69,7 @@ init(const Mesh &mesh) {
     for (uword i = 0; i < mesh.totalNumGrid(CENTER, mesh.domain().numDim()); ++i) {
         const SpaceCoord &x = mesh.gridCoord(CENTER, i);
         Parcel *parcel = new Parcel;
-        parcel->init(i);
+        parcel->init(i, 0);
         parcel->x(timeIdx) = x;
         parcel->meshIndex(timeIdx).locate(mesh, x);
         auto cellSize = mesh.cellSize(CENTER, i);
@@ -88,6 +88,7 @@ output(const TimeLevelIndex<2> &timeIdx, int ncId) const {
     int parcelDimId, skel1DimId, dimDimId, tracerDimId;
     int idVarId;
     int cDimIds[2], cVarId;
+    int hDimIds[3], hVarId;
     int mDimIds[2], mVarId;
     int sDimIds[3], s1VarId;
 #define OUTPUT_TRACER_SHAPE
@@ -121,6 +122,11 @@ output(const TimeLevelIndex<2> &timeIdx, int ncId) const {
     nc_def_var(ncId, "c", NC_DOUBLE, 2, cDimIds, &cVarId);
     sprintf(str, "parcel centroid coordinates on %s", mesh->domain().brief().c_str());
     nc_put_att(ncId, cVarId, "long_name", NC_CHAR, strlen(str), str);
+
+    hDimIds[0] = parcelDimId; hDimIds[1] = dimDimId; hDimIds[2] = dimDimId;
+    nc_def_var(ncId, "h", NC_DOUBLE, 3, hDimIds, &hVarId);
+    sprintf(str, "parcel linear deformation matrix");
+    nc_put_att(ncId, hVarId, "long_name", NC_CHAR, strlen(str), str);
 
     mDimIds[0] = parcelDimId; mDimIds[1] = tracerDimId;
     nc_def_var(ncId, "m", NC_DOUBLE, 2, mDimIds, &mVarId);
@@ -159,6 +165,18 @@ output(const TimeLevelIndex<2> &timeIdx, int ncId) const {
         }
     }
     nc_put_var(ncId, cVarId, doubleData);
+    delete [] doubleData;
+
+    doubleData = new double[_parcels.size()*mesh->domain().numDim()*mesh->domain().numDim()];
+    l = 0;
+    for (auto parcel : _parcels) {
+        for (uword m1 = 0; m1 < mesh->domain().numDim(); ++m1) {
+            for (uword m2 = 0; m2 < mesh->domain().numDim(); ++m2) {
+                doubleData[l++] = parcel->H(timeIdx)(m1, m2);
+            }
+        }
+    }
+    nc_put_var(ncId, hVarId, doubleData);
     delete [] doubleData;
     
     doubleData = new double[_parcels.size()*Tracers::numTracer()];

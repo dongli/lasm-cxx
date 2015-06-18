@@ -26,9 +26,6 @@ public:
     output(const TimeLevelIndex<2> &timeIdx, int ncId) const;
 
     void
-    addTracer();
-
-    void
     resetDensities();
 
     void

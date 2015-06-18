@@ -6,7 +6,7 @@
 
 namespace lasm {
 
-const Domain *Parcel::domain = NULL;
+const Mesh *Parcel::mesh = NULL;
 
 Parcel::
 Parcel() {
@@ -23,26 +23,27 @@ Parcel::
 }
 
 void Parcel::
-init(const Domain &_domain) {
-    domain = &_domain;
+init(const Mesh &_mesh) {
+    mesh = &_mesh;
 } // init
 
 void Parcel::
-init(int id) {
+init(int id, int rank) {
     _id = id;
+    _rank = rank;
     for (int l = 0; l < 2; ++l) {
-        _x.level(l).init(domain->numDim());
-        _H.level(l).set_size(domain->numDim(), domain->numDim());
+        _x.level(l).init(mesh->domain().numDim());
+        _H.level(l).set_size(mesh->domain().numDim(), mesh->domain().numDim());
         _detH.level(l) = -999.0;
-        _invH.level(l).set_size(domain->numDim(), domain->numDim());
-        _shapeSize.level(l).set_size(domain->numDim());
-        _meshIndex.level(l).init(domain->numDim());
+        _invH.level(l).set_size(mesh->domain().numDim(), mesh->domain().numDim());
+        _shapeSize.level(l).set_size(mesh->domain().numDim());
+        _meshIndex.level(l).init(mesh->domain().numDim());
     }
-    _U.set_size(domain->numDim(), domain->numDim());
-    _V.set_size(domain->numDim(), domain->numDim());
-    _S.set_size(domain->numDim());
-    longAxisVertexY.init(domain->numDim());
-    longAxisVertexX.init(domain->numDim());
+    _U.set_size(mesh->domain().numDim(), mesh->domain().numDim());
+    _V.set_size(mesh->domain().numDim(), mesh->domain().numDim());
+    _S.set_size(mesh->domain().numDim());
+    longAxisVertexY.init(mesh->domain().numDim());
+    longAxisVertexX.init(mesh->domain().numDim());
     _quadraturePoints = new QuadraturePoints(this);
     _skeletonPoints = new SkeletonPoints(this);
     _tracers = new Tracers(this);
@@ -55,7 +56,7 @@ updateDeformMatrix(const TimeLevelIndex<2> &timeIdx) {
     const field<BodyCoord> &y = SkeletonPoints::bodyCoords();
     const field<SpaceCoord> &x = _skeletonPoints->localSpaceCoords(timeIdx);
     const field<MeshIndex> &meshIndexs = _skeletonPoints->meshIndexs(timeIdx);
-    if (domain->numDim() == 2) {
+    if (mesh->domain().numDim() == 2) {
         // Calculate the elements of four matrices.
         double h11_1 = x[0](0)/y[0](0); double h21_1 = x[0](1)/y[0](0);
         double h12_2 = x[1](0)/y[1](1); double h22_2 = x[1](1)/y[1](1);
@@ -64,7 +65,7 @@ updateDeformMatrix(const TimeLevelIndex<2> &timeIdx) {
         // The final matrix is the combination of the four.
         H(0, 0) = (h11_1+h11_3)*0.5; H(0, 1) = (h12_2+h12_4)*0.5;
         H(1, 0) = (h21_1+h21_3)*0.5; H(1, 1) = (h22_2+h22_4)*0.5;
-    } else if (domain->numDim() == 3) {
+    } else if (mesh->domain().numDim() == 3) {
         // Calculate the elements of six matrices.
         double h11_1 = 0, h11_3 = 0, h12_2 = 0, h12_4 = 0, h13_5 = 0, h13_6 = 0;
         double h21_1 = 0, h21_3 = 0, h22_2 = 0, h22_4 = 0, h23_5 = 0, h23_6 = 0;
@@ -123,26 +124,40 @@ updateDeformMatrix(const TimeLevelIndex<2> &timeIdx) {
     // Eliminate the discrepency between detH and volume.
     double detH = arma::prod(_S);
     if (_detH.level(timeIdx) != -999.0) {
-        _S *= pow(_detH.level(timeIdx)/detH, 1.0/domain->numDim());
+        _S *= pow(_detH.level(timeIdx)/detH, 1.0/mesh->domain().numDim());
     } else {
        _detH.level(timeIdx) = detH;
     }
-    H = _U*diagmat(_S)*_V;
+    H = _U*diagmat(_S)*_V.t();
     _invH.level(timeIdx) = inv(H);
-    longAxisVertexY() = _invH.level(timeIdx)*H*_V.col(0);
+    longAxisVertexY() = _V.col(0);
     calcSpaceCoord(timeIdx, longAxisVertexY, longAxisVertexX);
-    _filament = _S[0]/_S[1];
+    _filament = _S[0]/_S.min();
 } // updateDeformMatrix
 
 void Parcel::
 updateDeformMatrix(const TimeLevelIndex<2> &timeIdx, const vec &S) {
     _S = S;
-    _H.level(timeIdx) = _U*diagmat(_S)*_V;
+    _H.level(timeIdx) = _U*diagmat(_S)*_V.t();
     _detH.level(timeIdx) = arma::prod(_S);
     _invH.level(timeIdx) = inv(_H.level(timeIdx));
-    longAxisVertexY() = _invH.level(timeIdx)*_H.level(timeIdx)*_V.col(0);
+    longAxisVertexY() = _V.col(0);
     calcSpaceCoord(timeIdx, longAxisVertexY, longAxisVertexX);
-    _filament = _S[0]/_S[1];
+    _filament = _S[0]/_S.min();
+} // updateDeformMatrix
+
+void Parcel::
+updateDeformMatrix(const TimeLevelIndex<2> &timeIdx,
+                   const mat &U, const vec &S, const mat &V) {
+    _U = U;
+    _S = S;
+    _V = V;
+    _H.level(timeIdx) = _U*diagmat(_S)*_V.t();
+    _detH.level(timeIdx) = arma::prod(_S);
+    _invH.level(timeIdx) = inv(_H.level(timeIdx));
+    longAxisVertexY() = _V.col(0);
+    calcSpaceCoord(timeIdx, longAxisVertexY, longAxisVertexX);
+    _filament = _S[0]/_S.min();
 } // updateDeformMatrix
 
 void Parcel::
@@ -166,12 +181,12 @@ updateVolume(const TimeLevelIndex<2> &timeIdx, double volume) {
 
 void Parcel::
 updateShapeSize(const TimeLevelIndex<2> &timeIdx) {
-    BodyCoord y(domain->numDim());
-    SpaceCoord x(domain->numDim());
-    for (uword m = 0; m < domain->numDim(); ++m) {
-        y() = _invH.level(timeIdx)*_H.level(timeIdx)*_V.col(m);
+    BodyCoord y(mesh->domain().numDim());
+    SpaceCoord x(mesh->domain().numDim());
+    for (uword m = 0; m < mesh->domain().numDim(); ++m) {
+        y() = _V.col(m);
         calcSpaceCoord(timeIdx, y, x);
-        _shapeSize.level(timeIdx)[m] = domain->calcDistance(x, _x.level(timeIdx));
+        _shapeSize.level(timeIdx)[m] = mesh->domain().calcDistance(x, _x.level(timeIdx));
     }
 } // updateShapeSize
 
@@ -180,11 +195,11 @@ calcSpaceCoord(const TimeLevelIndex<2> &timeIdx,
                const BodyCoord &y, SpaceCoord &x) const {
 #ifdef LASM_IN_SPHERE
     x() = H(timeIdx)*y();
-    domain->projectBack(geomtk::SphereDomain::STEREOGRAPHIC,
+    mesh->domain().projectBack(geomtk::SphereDomain::STEREOGRAPHIC,
                         this->x(timeIdx), x, x());
 #elif defined LASM_IN_CARTESIAN
     x() = this->x(timeIdx)()+H(timeIdx)*y();
-    domain->isValid(x);
+    mesh->domain().validateCoord(x);
 #endif
 } // calcSpaceCoord
 
@@ -193,11 +208,11 @@ calcBodyCoord(const TimeLevelIndex<2> &timeIdx,
               const SpaceCoord &x, BodyCoord &y) const {
 #ifdef LASM_IN_SPHERE
     
-    domain->project(geomtk::SphereDomain::STEREOGRAPHIC,
+    mesh->domain().project(geomtk::SphereDomain::STEREOGRAPHIC,
                     this->x(timeIdx), x, y());
     y() = invH(timeIdx)*y();
 #elif defined LASM_IN_CARTESIAN
-    y() = invH(timeIdx)*domain->diffCoord(x, this->x(timeIdx));
+    y() = invH(timeIdx)*mesh->domain().diffCoord(x, this->x(timeIdx));
 #endif
 } // calcBodyCoord
 
@@ -238,85 +253,126 @@ dump(const TimeLevelIndex<2> &timeIdx, const MeshAdaptor &meshAdaptor,
     } else {
         file.open("parcel_dump.txt");
     }
-    // Parcel centroid.
-    file << "centroid = (/" << x(timeIdx)(0)/RAD << ",";
-    file << x(timeIdx)(1)/RAD << "/)" << endl;
-    // Parcel skeleton points.
-    file << "skel_points = new((/4,2/), double)" << endl;
-    for (int m = 0; m < 2; ++m) {
-        file << "skel_points(:," << m << ") = (/";
-        for (int i = 0; i < _skeletonPoints->spaceCoords(timeIdx).size(); ++i) {
-            file << _skeletonPoints->spaceCoords(timeIdx)[i](m)/RAD;
-            if (i != 3) {
-                file << ",";
-            } else {
-                file << "/)" << endl;
-            }
-        }
-    }
-    // Parcel shape.
-    int n = 100;
-    file << "shape = new((/" << n << ",2/), double)" << endl;
-    double dtheta = PI2/(n-1);
-    SpaceCoord x(2); BodyCoord y(2);
-    vector<vec::fixed<2> > shape(n);
-    for (int i = 0; i < shape.size(); ++i) {
-        double theta = i*dtheta;
-        y(0) = cos(theta);
-        y(1) = sin(theta);
-        calcSpaceCoord(timeIdx, y, x);
-        shape[i] = x();
-    }
-    for (int m = 0; m < 2; ++m) {
-        file << "shape(:," << m << ") = (/";
-        for (int i = 0; i < shape.size(); ++i) {
-            if (i != shape.size()-1) {
-                file << shape[i][m]/RAD << ",";
-            } else {
-                file << shape[i][m]/RAD << "/)" << endl;
-            }
-        }
-    }
-    // Neighbor cells.
-    if (_numConnectedCell != 0) {
-        file << "ngb_cells = new((/" << _numConnectedCell << ",2/), double)" << endl;
+    if (meshAdaptor.mesh().domain().numDim() == 2) {
+        // Parcel centroid.
+        file << "centroid = (/" << x(timeIdx)(0)/RAD << ",";
+        file << x(timeIdx)(1)/RAD << "/)" << endl;
+        // Parcel skeleton points.
+        file << "skel_points = new((/4,2/), double)" << endl;
         for (int m = 0; m < 2; ++m) {
-            file << "ngb_cells(:," << m << ") = (/";
-            for (int i = 0; i < _numConnectedCell; ++i) {
-                int j = _connectedCellIndexs[i];
-                file << meshAdaptor.coord(j)(m)/RAD;
-                if (i != _numConnectedCell-1) {
+            file << "skel_points(:," << m << ") = (/";
+            for (int i = 0; i < _skeletonPoints->spaceCoords(timeIdx).size(); ++i) {
+                file << _skeletonPoints->spaceCoords(timeIdx)[i](m)/RAD;
+                if (i != 3) {
                     file << ",";
                 } else {
                     file << "/)" << endl;
                 }
             }
         }
-    }
-    // Neighbor parcels.
-    int numNeighborParcel = 0;
-    for (int i = 0; i < _numConnectedCell; ++i) {
-        int j = _connectedCellIndexs[i];
-        numNeighborParcel += meshAdaptor.numContainedParcel(j);
-    }
-    if (numNeighborParcel != 0) {
-        file << "ngb_tracers = new((/" << numNeighborParcel << ",2/), double)" << endl;
+        // Parcel shape.
+        int n = 100;
+        file << "shape = new((/" << n << ",2/), double)" << endl;
+        double dtheta = PI2/(n-1);
+        SpaceCoord x(2); BodyCoord y(2);
+        vector<vec::fixed<2> > shape(n);
+        for (int i = 0; i < shape.size(); ++i) {
+            double theta = i*dtheta;
+            y(0) = cos(theta);
+            y(1) = sin(theta);
+            calcSpaceCoord(timeIdx, y, x);
+            shape[i] = x();
+        }
         for (int m = 0; m < 2; ++m) {
-            file << "ngb_tracers(:," << m << ") = (/";
-            int k = 0;
-            for (int i = 0; i < _numConnectedCell; ++i) {
-                const vector<Parcel*> &parcels = meshAdaptor.containedParcels(_connectedCellIndexs[i]);
-                for (int j = 0; j < meshAdaptor.numContainedParcel(_connectedCellIndexs[i]); ++j) {
-                    file << parcels[j]->x(timeIdx)(m)/RAD;
-                    if (k != numNeighborParcel-1) {
+            file << "shape(:," << m << ") = (/";
+            for (int i = 0; i < shape.size(); ++i) {
+                if (i != shape.size()-1) {
+                    file << shape[i][m]/RAD << ",";
+                } else {
+                    file << shape[i][m]/RAD << "/)" << endl;
+                }
+            }
+        }
+        // Neighbor cells.
+        if (_numConnectedCell != 0) {
+            file << "ngb_cells = new((/" << _numConnectedCell << ",2/), double)" << endl;
+            for (int m = 0; m < 2; ++m) {
+                file << "ngb_cells(:," << m << ") = (/";
+                for (int i = 0; i < _numConnectedCell; ++i) {
+                    int j = _connectedCellIndexs[i];
+                    file << meshAdaptor.coord(j)(m)/RAD;
+                    if (i != _numConnectedCell-1) {
                         file << ",";
                     } else {
                         file << "/)" << endl;
                     }
-                    k++;
                 }
             }
         }
+        // Neighbor parcels.
+        int numNeighborParcel = 0;
+        for (int i = 0; i < _numConnectedCell; ++i) {
+            int j = _connectedCellIndexs[i];
+            numNeighborParcel += meshAdaptor.numContainedParcel(j);
+        }
+        if (numNeighborParcel != 0) {
+            file << "ngb_tracers = new((/" << numNeighborParcel << ",2/), double)" << endl;
+            for (int m = 0; m < 2; ++m) {
+                file << "ngb_tracers(:," << m << ") = (/";
+                int k = 0;
+                for (int i = 0; i < _numConnectedCell; ++i) {
+                    const vector<Parcel*> &parcels = meshAdaptor.containedParcels(_connectedCellIndexs[i]);
+                    for (int j = 0; j < meshAdaptor.numContainedParcel(_connectedCellIndexs[i]); ++j) {
+                        file << parcels[j]->x(timeIdx)(m)/RAD;
+                        if (k != numNeighborParcel-1) {
+                            file << ",";
+                        } else {
+                            file << "/)" << endl;
+                        }
+                        k++;
+                    }
+                }
+            }
+        }
+    } else if (meshAdaptor.mesh().domain().numDim() == 3) {
+        int nd = meshAdaptor.mesh().domain().numDim();
+        int ncId, dimDimId, sklDimId, x0VarId, HVarId, xsVarId, xvVarId;
+        int dimIds[2], j;
+        double data[SkeletonPoints::numPoint()*nd];
+
+        if (fileName) {
+            nc_create(fileName, NC_CLOBBER, &ncId);
+        } else {
+            nc_create("parcel_dump.nc", NC_CLOBBER, &ncId);
+        }
+        nc_def_dim(ncId, "num_dim", nd, &dimDimId);
+        nc_def_dim(ncId, "num_skl", SkeletonPoints::numPoint(), &sklDimId);
+        nc_def_var(ncId, "x0", NC_DOUBLE, 1, &dimDimId, &x0VarId);
+        dimIds[0] = dimDimId;
+        dimIds[1] = dimDimId;
+        nc_def_var(ncId, "H", NC_DOUBLE, 2, dimIds, &HVarId);
+        dimIds[0] = sklDimId;
+        dimIds[1] = dimDimId;
+        nc_def_var(ncId, "xs", NC_DOUBLE, 2, dimIds, &xsVarId);
+        nc_def_var(ncId, "xv", NC_DOUBLE, 1, &dimDimId, &xvVarId);
+        nc_enddef(ncId);
+        nc_put_var(ncId, x0VarId, _x.level(timeIdx)().memptr());
+        j = 0;
+        for (int m1 = 0; m1 < nd; ++m1) {
+            for (int m2 = 0; m2 < nd; ++m2) {
+                data[j++] = _H.level(timeIdx)(m1, m2);
+            }
+        }
+        nc_put_var(ncId, HVarId, data);
+        j = 0;
+        for (int i = 0; i < SkeletonPoints::numPoint(); ++i) {
+            for (int m = 0; m < nd; ++m) {
+                data[j++] = _skeletonPoints->spaceCoord(timeIdx, i)(m);
+            }
+        }
+        nc_put_var(ncId, xsVarId, data);
+        nc_put_var(ncId, xvVarId, longAxisVertexX().memptr());
+        nc_close(ncId);
     }
     file.close();
 }

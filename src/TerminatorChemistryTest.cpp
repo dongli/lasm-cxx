@@ -1,10 +1,10 @@
-#ifdef LASM_IN_SPHERE
-
 #include "TerminatorChemistryTest.h"
 
 #include "AdvectionManager.h"
 #include "Parcel.h"
 #include "Tracers.h"
+
+#ifdef LASM_IN_SPHERE
 
 TerminatorChemistryTest::
 TerminatorChemistryTest() {
@@ -29,19 +29,19 @@ init(const ConfigManager &configManager, AdvectionManager &advectionManager) {
     _domain->radius() = 6.3172e6;;
     _mesh = new Mesh(*_domain);
     // Initialize mesh.
-    int numLon = configManager.getValue("test_case", "num_lon", 360);
-    int numLat = configManager.getValue("test_case", "num_lat", 181);
+    int numLon = configManager.getValue("terminator_chemistry", "num_lon", 360);
+    int numLat = configManager.getValue("terminator_chemistry", "num_lat", 181);
     _mesh->init(numLon, numLat);
     // Initialize time manager.
-    _stepSize = configManager.getValue("test_case", "time_step_size_in_seconds", _stepSize);
+    _stepSize = configManager.getValue("terminator_chemistry", "time_step_size_in_seconds", _stepSize);
     _timeManager.init(_startTime, _endTime, _stepSize);
     // Initialize IO manager.
     std::string outputPattern = "lasm.terminator_chemistry."+
         boost::lexical_cast<std::string>(numLon)+"x"+
         boost::lexical_cast<std::string>(numLat)+".%5s.nc";
-    outputPattern = configManager.getValue("test_case", "output_pattern", outputPattern);
-    TimeStepUnit freqUnit = geomtk::timeStepUnitFromString(configManager.getValue<std::string>("test_case", "output_frequency_unit"));
-    int freq = configManager.getValue<int>("test_case", "output_frequency");
+    outputPattern = configManager.getValue("terminator_chemistry", "output_pattern", outputPattern);
+    TimeStepUnit freqUnit = geomtk::timeStepUnitFromString(configManager.getValue<std::string>("terminator_chemistry", "output_frequency_unit"));
+    int freq = configManager.getValue<int>("terminator_chemistry", "output_frequency");
     io.init(_timeManager);
     outputIdx = io.addOutputFile(*_mesh, outputPattern, freqUnit, freq);
     // Initialize velocity field.

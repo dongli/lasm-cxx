@@ -3,8 +3,10 @@
 
 #define LASM_TENDENCY_ON_PARCEL
 #define LASM_IN_CARTESIAN
+//#define LASM_MAX_MIX
 //#define LASM_IN_SPHERE
 //#define LASM_USE_RLL_MESH
+#define LASM_USE_DIAG
 
 #if defined LASM_IN_CARTESIAN
 #include "geomtk/Cartesian.h"
@@ -24,6 +26,8 @@ using std::string;
 using std::cout;
 using std::endl;
 using std::setw;
+using std::setprecision;
+using std::setfill;
 
 using geomtk::LINEAR;
 

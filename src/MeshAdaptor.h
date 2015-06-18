@@ -6,7 +6,7 @@
 namespace lasm {
 
 class MeshAdaptor {
-    const Mesh *mesh;
+    const Mesh *_mesh;
     vector<Field<double, 2>*> _densities;
     vector<Field<double>*> _tendencies;
     vector<uword> _numConnectedParcel;
@@ -22,6 +22,11 @@ public:
     void
     init(const Mesh &mesh);
 
+    const Mesh&
+    mesh() const {
+        return *_mesh;
+    }
+
     uword
     cellIndex(int i) const {
         return _cellIndexs[i];
@@ -29,12 +34,12 @@ public:
 
     const SpaceCoord&
     coord(int cellIdx) const {
-        return mesh->gridCoord(CENTER, cellIdx);
+        return _mesh->gridCoord(CENTER, cellIdx);
     }
 
     double
     volume(int cellIdx) const {
-        return mesh->cellVolume(cellIdx);
+        return _mesh->cellVolume(cellIdx);
     }
 
     const Field<double, 2>&

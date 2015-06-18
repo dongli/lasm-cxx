@@ -23,7 +23,7 @@ init(const Domain &_domain) {
     for (uword i = 0; i < y.size(); ++i) {
         y[i].init(domain->numDim());
     }
-    double d = 1;
+    double d = 0.5;
     if (domain->numDim() == 2) {
         y[0]() <<  -d << 0.0 << arma::endr;
         y[1]() << 0.0 <<  -d << arma::endr;
@@ -40,11 +40,8 @@ init(const Domain &_domain) {
 } // init
 
 void SkeletonPoints::
-init(const Mesh &mesh, const vec &sizes) {
+init() {
     TimeLevelIndex<2> timeIdx;
-#ifndef NDEBUG
-    assert(sizes.size() == domain->numDim());
-#endif
     // Set the space coordinates of the skeleton points.
     for (int l = 0; l < x.numLevel(); ++l) {
         x.level(l).set_size(y.size());
@@ -56,6 +53,16 @@ init(const Mesh &mesh, const vec &sizes) {
             I.level(l)[i].init(domain->numDim());
         }
     }
+} // init
+
+void SkeletonPoints::
+init(const Mesh &mesh, const vec &sizes) {
+    TimeLevelIndex<2> timeIdx;
+#ifndef NDEBUG
+    assert(sizes.size() == domain->numDim());
+#endif
+    // Set the space coordinates of the skeleton points.
+    init();
     const SpaceCoord &x0 = hostParcel->x(timeIdx);
 #if defined LASM_IN_CARTESIAN
     if (domain->numDim() == 2) {

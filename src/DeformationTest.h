@@ -1,8 +1,6 @@
 #ifndef __LASM_DeformationTest__
 #define __LASM_DeformationTest__
 
-#ifdef LASM_IN_SPHERE
-
 #include "lasm_commons.h"
 
 // TODO: Move this class to GEOMTK.
@@ -32,7 +30,5 @@ protected:
     virtual void
     setVelocityField(const TimeLevelIndex<2> &timeIdx);
 }; // DeformationTest
-
-#endif // LASM_IN_SPHERE
 
 #endif // __LASM_DeformationTest__
