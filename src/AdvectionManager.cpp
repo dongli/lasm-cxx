@@ -19,16 +19,16 @@ AdvectionManager::
 }
 
 void AdvectionManager::
-init(const ConfigManager &configManager, const Mesh &mesh) {
+init(const Mesh &mesh) {
     // Read in parameters.
-    filamentLimit = configManager.getValue("lasm", "filament_limit", 5.0);
-    minBiasLimit  = configManager.getValue("lasm", "min_bias_limit", 0.1);
-    maxBiasLimit  = configManager.getValue("lasm", "max_bias_limit", 0.1);
-    radialMixing  = configManager.getValue("lasm", "radial_mixing",  1.0);
-    lateralMixing = configManager.getValue("lasm", "lateral_mixing", 1000.0);
-    restoreFactor = configManager.getValue("lasm", "restore_factor", 0.001);
-    reshapeFactor = configManager.getValue("lasm", "reshape_factor", 0.5);
-    connectScale  = configManager.getValue("lasm", "connect_scale",  1.5);
+    filamentLimit = ConfigManager::getValue("lasm", "filament_limit", 5.0);
+    minBiasLimit  = ConfigManager::getValue("lasm", "min_bias_limit", 0.1);
+    maxBiasLimit  = ConfigManager::getValue("lasm", "max_bias_limit", 0.1);
+    radialMixing  = ConfigManager::getValue("lasm", "radial_mixing",  1.0);
+    lateralMixing = ConfigManager::getValue("lasm", "lateral_mixing", 1000.0);
+    restoreFactor = ConfigManager::getValue("lasm", "restore_factor", 0.001);
+    reshapeFactor = ConfigManager::getValue("lasm", "reshape_factor", 0.5);
+    connectScale  = ConfigManager::getValue("lasm", "connect_scale",  1.5);
     // Record domain and mesh.
     domain = &mesh.domain();
     this->mesh = &mesh;
@@ -158,6 +158,9 @@ statistics(const TimeLevelIndex<2> &timeIdx) {
 void AdvectionManager::
 integrate(double dt, const TimeLevelIndex<2> &newIdx,
           const VelocityField &velocityField) {
+#ifdef LASM_TENDENCY_ON_MESH
+    remapTendencyFromGridsToParcels(newIdx);
+#endif
     TimeLevelIndex<2> oldIdx = newIdx-1;
     TimeLevelIndex<2> halfIdx = newIdx-0.5;
     double dt05 = 0.5*dt;
@@ -285,21 +288,6 @@ integrate(double dt, const TimeLevelIndex<2> &newIdx,
             Tracers::totalMass(t) += parcel->tracers().mass(t);
         }
     }
-#ifndef NDEBUG
-    if (domain->numDim() == 2) {
-        double totalVolume = 0;
-        for (auto parcel : parcelManager.parcels()) {
-            totalVolume += parcel->volume(newIdx);
-        }
-#ifdef LASM_IN_SPHERE
-        double trueTotalVolume = 4*PI*pow(domain->radius(), 2);
-#elif defined LASM_IN_CARTESIAN
-        double trueTotalVolume = totalVolume;
-#endif
-        double error = (totalVolume-trueTotalVolume)/trueTotalVolume;
-        assert(fabs(error) < 1.0e-12);
-    }
-#endif
 } // integrate
 
 void AdvectionManager::
@@ -666,6 +654,7 @@ remapTendencyFromGridsToParcels(const TimeLevelIndex<2> &timeIdx) {
     parcelManager.resetTendencies();
     for (uword i = 0; i < gridCoords.n_cols; ++i) {
         int cellIdx = meshAdaptor.cellIndex(i);
+        assert(meshAdaptor.numConnectedParcel(cellIdx) != 0);
         double totalWeight = 0;
         for (uword j = 0; j < meshAdaptor.numConnectedParcel(cellIdx); ++j) {
             totalWeight += meshAdaptor.remapWeight(cellIdx, j);

@@ -6,9 +6,8 @@ DeformationTest::
 DeformationTest() {
     period = 5;
     _stepSize = period/600;
-    _startTime.month = 1;
-    _startTime.day = 1;
-    _endTime = _startTime+period;
+    _startTime = ptime(date(2000, 1, 1));
+    _endTime = _startTime+geomtk::seconds(_stepSize);
     REPORT_ONLINE;
 }
 
@@ -18,29 +17,28 @@ DeformationTest::
 }
 
 void DeformationTest::
-init(const ConfigManager &configManager, AdvectionManager &advectionManager) {
-    subcase = configManager.getValue("deform", "subcase",
+init(AdvectionManager &advectionManager) {
+    subcase = ConfigManager::getValue("deform", "subcase",
                                      std::string("case4"));
     // Create domain and mesh objects.
     _domain = new Domain(2);
     _domain->radius() = 1;
     _mesh = new Mesh(*_domain);
     // Initialize mesh.
-    int numLon = configManager.getValue("deform", "num_lon", 240);
-    int numLat = configManager.getValue("deform", "num_lat", 121);
+    int numLon = ConfigManager::getValue("deform", "num_lon", 240);
+    int numLat = ConfigManager::getValue("deform", "num_lat", 121);
     _mesh->init(numLon, numLat);
     // Initialize time manager.
-    _stepSize = configManager.getValue("deform", "time_step_size_in_seconds", _stepSize);
+    _stepSize = ConfigManager::getValue("deform", "time_step_size_in_seconds", _stepSize);
     _timeManager.init(_startTime, _endTime, _stepSize);
     // Initialize IO manager.
     std::string outputPattern = "lasm.deform."+subcase+"."+
         boost::lexical_cast<std::string>(numLon)+"x"+
         boost::lexical_cast<std::string>(numLat)+".%5s.nc";
-    outputPattern = configManager.getValue("deform", "output_pattern", outputPattern);
-    TimeStepUnit freqUnit = geomtk::timeStepUnitFromString(configManager.getValue<std::string>("deform", "output_frequency_unit"));
-    int freq = configManager.getValue<int>("deform", "output_frequency");
+    outputPattern = ConfigManager::getValue("deform", "output_pattern", outputPattern);
+    auto freq = ConfigManager::getValue<std::string>("deform", "output_frequency");
     io.init(_timeManager);
-    outputIdx = io.addOutputFile(*_mesh, outputPattern, freqUnit, freq);
+    outputIdx = io.addOutputFile(*_mesh, outputPattern, durationFromString(freq));
 #ifdef LASM_USE_DIAG
     // Initialize diagnostics.
     Diagnostics::init(*_mesh, io);
@@ -55,7 +53,7 @@ init(const ConfigManager &configManager, AdvectionManager &advectionManager) {
                                  &velocityField(1),
                                  &velocityField.divergence()});
     // Initialize advection manager.
-    advectionManager.init(configManager, *_mesh);
+    advectionManager.init(*_mesh);
     // Initialize density fields for output.
     numTracer = 8;
     advectionManager.addTracer("q0", "1", "backgroud tracer");

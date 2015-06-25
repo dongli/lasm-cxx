@@ -18,7 +18,7 @@ public:
     virtual ~DeformationTest();
 
     virtual void
-    init(const ConfigManager &configManager, AdvectionManager &advectionManager);
+    init(AdvectionManager &advectionManager);
 
     virtual void
     setInitialCondition(AdvectionManager &advectionManager);

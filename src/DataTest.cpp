@@ -15,15 +15,14 @@ DataTest::
 }
 
 void DataTest::
-init(const ConfigManager &configManager, AdvectionManager &advectionManager) {
+init(AdvectionManager &advectionManager) {
     // Read in configuration.
-    auto caseName = configManager.getValue<string>("data", "case_name");
-    auto dataRoot = configManager.getValue<string>("data", "data_root");
-    auto dataPattern = configManager.getValue<string>("data", "data_pattern");
-    auto outputPattern = configManager.getValue<string>("data", "output_pattern");
-    TimeStepUnit freqUnit = geomtk::timeStepUnitFromString(configManager.getValue<string>("data", "output_frequency_unit"));
-    int freq = configManager.getValue<int>("data", "output_frequency");
-    auto domainType = configManager.getValue<string>("data", "domain_type");
+    auto caseName = ConfigManager::getValue<string>("data", "case_name");
+    auto dataRoot = ConfigManager::getValue<string>("data", "data_root");
+    auto dataPattern = ConfigManager::getValue<string>("data", "data_pattern");
+    auto outputPattern = ConfigManager::getValue<string>("data", "output_pattern");
+    auto freq = ConfigManager::getValue<string>("data", "output_frequency");
+    auto domainType = ConfigManager::getValue<string>("data", "domain_type");
     // Create domain and mesh objects.
     mark_tag tagDomainType(1), tagNumDomain(2);
     sregex reDomainType = (tagDomainType= +_w) >> ' ' >> (tagNumDomain= +_d) >> "d";
@@ -41,13 +40,13 @@ init(const ConfigManager &configManager, AdvectionManager &advectionManager) {
     // Initialize IO manager.
     io.init(_timeManager);
     dataIdx = io.addInputFile(*_mesh, dataRoot+"/"+dataPattern);
-    outputIdx = io.addOutputFile(*_mesh, outputPattern, freqUnit, freq);
+    outputIdx = io.addOutputFile(*_mesh, outputPattern, geomtk::durationFromString(freq));
     // Initialize time manager.
     vector<string> filePaths = geomtk::SystemTools::getFilePaths(dataRoot, geomtk::StampString::wildcard(dataPattern));
     _startTime = io.getTime(filePaths.front());
     _endTime = io.getTime(filePaths.back());
     _stepSize = io.file(dataIdx).getAttribute<float>("time_step_size_in_seconds");
-    _stepSize = configManager.getValue("data", "time_step_size_in_seconds", _stepSize);
+    _stepSize = ConfigManager::getValue("data", "time_step_size_in_seconds", _stepSize);
     _timeManager.init(_startTime, _endTime, _stepSize);
     // Read in domain from the first data.
     _domain->init(io.file(dataIdx).currentFilePath());
@@ -68,7 +67,7 @@ init(const ConfigManager &configManager, AdvectionManager &advectionManager) {
     Diagnostics::addMetric<Field<int> >("ncp2", "1", "connected parcel number");
 #endif
     // Initialize advection manager.
-    advectionManager.init(configManager, *_mesh);
+    advectionManager.init(*_mesh);
     // Initialize density fields for input and output.
     numTracer = io.file(dataIdx).getAttribute<int>("num_tracer");
     for (int t = 0; t < numTracer; ++t) {
@@ -131,5 +130,7 @@ output(const TimeLevelIndex<2> &timeIdx,
         advectionManager.output(timeIdx, io.file(outputIdx).fileId);
     }
     io.close(outputIdx);
+#ifdef LASM_USE_DIAG
     Diagnostics::output();
+#endif
 } // output

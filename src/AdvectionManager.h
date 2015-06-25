@@ -31,7 +31,7 @@ public:
     virtual ~AdvectionManager();
 
     virtual void
-    init(const ConfigManager &configManager, const Mesh &mesh);
+    init(const Mesh &mesh);
 
     virtual void
     addTracer(const string &name, const string &unit, const string &comment);

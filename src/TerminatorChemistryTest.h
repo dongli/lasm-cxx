@@ -12,7 +12,7 @@ public:
     virtual ~TerminatorChemistryTest();
 
     virtual void
-    init(const ConfigManager &configManager, AdvectionManager &advactionManager);
+    init(AdvectionManager &advactionManager);
 
     virtual void
     setInitialCondition(AdvectionManager &advactionManager);

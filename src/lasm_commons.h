@@ -17,6 +17,7 @@
 namespace lasm {
 
 using arma::vec;
+using arma::uvec;
 using arma::mat;
 using arma::uword;
 using arma::field;
