@@ -3,12 +3,12 @@
 using namespace lasm;
 
 template <class TestType>
-void run(const ConfigManager &configManager) {
+void run() {
     TestType test;
     AdvectionManager advectionManager;
     TimeLevelIndex<2> oldIdx, newIdx;
 
-    test.init(configManager, advectionManager);
+    test.init(advectionManager);
     test.setInitialCondition(advectionManager);
     test.output(oldIdx, advectionManager);
 
@@ -25,21 +25,24 @@ int main(int argc, char const *argv[])
     if (argc != 2) {
         REPORT_ERROR("Configure file path is needed!");
     }
-    ConfigManager configManager;
 
-    configManager.parse(argv[1]);
+    ConfigManager::parse(argv[1]);
 
-    std::string caseName = configManager.getValue<std::string>("test_case", "case_name");
+    auto caseName = ConfigManager::getValue<std::string>("common", "case_name");
     if (caseName == "deform") {
 #ifdef LASM_IN_SPHERE
-        run<DeformationTest>(configManager);
+        run<DeformationTest>();
 #endif
     } else if (caseName == "terminator_chemistry") {
 #ifdef LASM_IN_SPHERE
-        run<TerminatorChemistryTest>(configManager);
+        run<TerminatorChemistryTest>();
+#endif
+    } else if (caseName == "barotropic") {
+#ifdef LASM_IN_SPHERE
+        run<BarotropicTest>();
 #endif
     } else if (caseName == "data") {
-        run<DataTest>(configManager);
+        run<DataTest>();
     }
 
     return 0;

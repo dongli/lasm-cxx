@@ -1,0 +1,40 @@
+{
+    "common":
+    {
+        "case_name": "barotropic"
+    },
+    "wrf_les":
+    {
+        "domain_type": "Cartesian 2d",
+        "data_root": "/Users/dongli/lasm.build/data",
+        "data_pattern": "wrf_les.40x40x40.%Y-%N-%D_%H:%M:%S.nc",
+        "time_step_size_in_seconds": 30,
+        "output_pattern": "lasm.wrf_les.40x40x40.%5s.nc",
+        "output_frequency": "1 step",
+        "velocity_stagger": true
+    },
+    "barotropic":
+    {
+        "domain_type": "Sphere 2d",
+        "data_root": "/Users/dongli/barotropic-model.build",
+        "data_pattern": "barotropic.%Y-%N-%D_%H:%M:%S.nc",
+        "time_step_size_in_seconds": 1800,
+        "output_pattern": "lasm.barotropic.dt1800.240x121.%5s.nc",
+        "output_frequency": "1 hour",
+        "velocity_stagger": false
+    },
+    "lasm":
+    {
+        "restore_factor": 0.01
+    //    "parcel_refine_file_path": "/Users/dongli/lasm.build/data/wrf_les.refine.40x40x40.nc"
+    },
+    "deform":
+    {
+        "output_frequency": "1 step"
+    },
+    "terminator_chemistry":
+    {
+        "tag": "tendency_on_mesh",
+        "output_frequency": "1 step"
+    }
+}

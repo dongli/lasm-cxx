@@ -13,5 +13,6 @@
 #include "DataTest.h"
 #include "DeformationTest.h"
 #include "TerminatorChemistryTest.h"
+#include "BarotropicTest.h"
 
 #endif

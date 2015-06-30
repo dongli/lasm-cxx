@@ -7,7 +7,7 @@ DeformationTest() {
     period = 5;
     _stepSize = period/600;
     _startTime = ptime(date(2000, 1, 1));
-    _endTime = _startTime+geomtk::seconds(_stepSize);
+    _endTime = _startTime+geomtk::seconds(period);
     REPORT_ONLINE;
 }
 

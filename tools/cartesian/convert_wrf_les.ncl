@@ -75,8 +75,9 @@ begin
 	global_att@domain_z_boundary_condition = "rigid-rigid"
 	global_att@num_tracer = 2
 
-	do l = 0, num_time-1
-		file_path = "wrf_les."+resolution+"."+f_in->Times(l,:)+".nc"
+	do l = 0, num_time-1, 10
+		time_str = str_sub_str(f_in->Times(l,:), "0001", "2000")
+		file_path = "wrf_les."+resolution+"."+time_str+".nc"
 		system("echo 'writing "+file_path+" ...'")
 		system("rm -rf "+file_path)
 		f_out = addfile(file_path, "c")
@@ -104,7 +105,7 @@ begin
 		filevardef(f_out, "q1",     "double", (/"time","z",		"y",	 "x"	 /))
 
 		f_out->time = (/time(l)/)
-        f_out->time@units = "hours since 0001-01-01 00:00:00"
+        f_out->time@units = "hours since 2000-01-01 00:00:00"
 		f_out->x = (/x_full/)
 		f_out->x@long_name = "x"
 		f_out->x@units = "1"
