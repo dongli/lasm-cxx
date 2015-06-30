@@ -22,8 +22,35 @@ ParcelManager::
 // TODO: Support to only set parcels within limited region.
 void ParcelManager::
 init(const Mesh &mesh) {
+    Field<int> numParcelPerCell;
+    numParcelPerCell.create("rp", "1", "parcel refinement", mesh, CENTER, mesh.domain().numDim());
+    if (ConfigManager::hasKey("lasm", "parcel_refine_file_path")) {
+        auto filePath = ConfigManager::getValue<string>("lasm", "parcel_refine_file_path");
+        int ncId, ret, varId;
+        int *buffer = new int[mesh.totalNumGrid(CENTER)];
+        ret = nc_open(filePath.c_str(), NC_NOWRITE, &ncId);
+        CHECK_NC_OPEN(ret, filePath);
+        ret = nc_inq_varid(ncId, "rp", &varId);
+        CHECK_NC_INQ_VARID(ret, filePath, "rp");
+        ret = nc_get_var(ncId, varId, buffer);
+        CHECK_NC_GET_VAR(ret, filePath, "rp");
+        ret = nc_close(ncId);
+        CHECK_NC_CLOSE(ret, filePath);
+        for (uword i = 0; i < mesh.totalNumGrid(CENTER); ++i) {
+            numParcelPerCell(i) = buffer[i];
+        }
+        delete [] buffer;
+    } else {
+        for (uword i = 0; i < mesh.totalNumGrid(CENTER); ++i) {
+            numParcelPerCell(i) = 1;
+        }
+    }
+    uvec n(mesh.domain().numDim());
+    SpaceCoord x(mesh.domain().numDim());
+    vec dx(mesh.domain().numDim());
     this->mesh = &mesh;
     TimeLevelIndex<2> timeIdx;
+    int id = 0;
 #ifdef LASM_USE_RLL_MESH
     vec areas(mesh.numGrid(1, FULL));
     vec areaWeights(mesh.numGrid(1, FULL));
@@ -33,8 +60,6 @@ init(const Mesh &mesh) {
         areaWeights[j] = exp(-0.1*fabs(mesh.sinLat(FULL, j)));
     }
     double maxArea = areas.max();
-    SpaceCoord x(mesh.domain().numDim());
-    int id = 0;
     vec size(mesh.domain().numDim());
     for (uword k = mesh.ks(FULL); k <= mesh.ke(FULL); ++k) {
         if (mesh.domain().numDim() == 3) {
@@ -66,19 +91,23 @@ init(const Mesh &mesh) {
         }
     }
 #else
-    for (uword i = 0; i < mesh.totalNumGrid(CENTER, mesh.domain().numDim()); ++i) {
-        const SpaceCoord &x = mesh.gridCoord(CENTER, i);
-        Parcel *parcel = new Parcel;
-        parcel->init(i, 0);
-        parcel->x(timeIdx) = x;
-        parcel->meshIndex(timeIdx).locate(mesh, x);
-        auto cellSize = mesh.cellSize(CENTER, i);
-        parcel->skeletonPoints().init(mesh, cellSize);
-        parcel->volume(timeIdx) = mesh.cellVolume(i);
-        parcel->updateDeformMatrix(timeIdx);
-        parcel->resetSkeletonPoints(timeIdx, mesh);
-        parcel->tracers().init();
-        _parcels.push_back(parcel);
+    for (uword i = 0; i < mesh.totalNumGrid(CENTER); ++i) {
+        n.fill(pow(numParcelPerCell(i), 1.0/mesh.domain().numDim()));
+        const SpaceCoord &x0 = mesh.gridCoord(CENTER, i);
+        dx = mesh.cellSize(CENTER, i)/n;
+        for (uword j = 0; j < numParcelPerCell(i); ++j) {
+            subdivide(n, dx, j, x0, x);
+            Parcel *parcel = new Parcel;
+            parcel->init(id++, 0);
+            parcel->x(timeIdx) = x;
+            parcel->meshIndex(timeIdx).locate(mesh, x);
+            parcel->skeletonPoints().init(mesh, dx);
+            parcel->volume(timeIdx) = mesh.cellVolume(i)/numParcelPerCell(i);
+            parcel->updateDeformMatrix(timeIdx);
+            parcel->resetSkeletonPoints(timeIdx, mesh);
+            parcel->tracers().init();
+            _parcels.push_back(parcel);
+        }
     }
 #endif
 } // init

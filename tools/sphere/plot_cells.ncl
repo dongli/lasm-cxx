@@ -204,10 +204,10 @@ begin
         num_lat = dimsizes(f->lat)
         if (isStrSubset(test_case, "barotropic")) then
             if (ic .eq. "step") then
-                q = f->q2/f->q0
+                q = f->q1/f->q0
             end if
             if (ic .eq. "gd") then
-                q = f->q1
+                q = f->q2
             end if
         end if
         if (isStrSubset(test_case, "rotation")) then
