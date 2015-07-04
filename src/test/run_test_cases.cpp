@@ -41,7 +41,7 @@ int main(int argc, char const *argv[])
 #ifdef LASM_IN_SPHERE
         run<BarotropicTest>();
 #endif
-    } else if (caseName == "data") {
+    } else if (caseName == "wrf_les") {
         run<DataTest>();
     }
 

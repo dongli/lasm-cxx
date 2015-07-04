@@ -13,14 +13,13 @@ class AdvectionManager
     MeshAdaptor meshAdaptor;
     Regrid regrid;
 
-    double filamentLimit;   // Control the filament degree.
-    double minBiasLimit;    // Control the more strict skeleton point bias.
-    double maxBiasLimit;    // Control the less strict skeleton point bias.
-    double radialMixing;    // Control the radial mixing degree.
-    double lateralMixing;   // Control the lateral mixing degree.
-    double restoreFactor;   // Control the base density restore degree.
-    double reshapeFactor;   // Control the parcel shape change after mix.
-    double connectScale;    // Control the parcel-grid connection scale.
+    double maxFilament;
+    double maxShapeBias;
+    double radialMixWeight;
+    double lateralMixWeight;
+    double mixCoef;
+    double reshapeCoef;
+    double connectScale;
 
     double refVolume;       // Reference parcel volume.
 

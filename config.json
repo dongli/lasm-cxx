@@ -5,7 +5,7 @@
     },
     "wrf_les":
     {
-        "domain_type": "Cartesian 2d",
+        "domain_type": "Cartesian 3d",
         "data_root": "/Users/dongli/lasm.build/data",
         "data_pattern": "wrf_les.40x40x40.%Y-%N-%D_%H:%M:%S.nc",
         "time_step_size_in_seconds": 30,
@@ -25,7 +25,6 @@
     },
     "lasm":
     {
-        "restore_factor": 0.01
     //    "parcel_refine_file_path": "/Users/dongli/lasm.build/data/wrf_les.refine.40x40x40.nc"
     },
     "deform":
@@ -34,7 +33,7 @@
     },
     "terminator_chemistry":
     {
-        "tag": "tendency_on_mesh",
+        "output_pattern": "lasm.terminator_chemistry.tendency_on_mesh.360x181.%5s.nc",
         "output_frequency": "1 step"
     }
 }

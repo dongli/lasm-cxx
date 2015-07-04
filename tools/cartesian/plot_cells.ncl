@@ -58,8 +58,7 @@ begin
     end_time = 7200
     time_step = 100
 
-    file_prefix = test_case+"."+resolution
-    ;file_prefix = "lasm."+test_case+"."+resolution
+    file_prefix = "lasm."+test_case+"."+resolution
 
     fs = systemfunc("for (( i = "+start_time+"; i <= "+end_time+"; "+ \
         "i = i+"+time_step+" )); "+ \

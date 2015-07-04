@@ -21,13 +21,12 @@ AdvectionManager::
 void AdvectionManager::
 init(const Mesh &mesh) {
     // Read in parameters.
-    filamentLimit = ConfigManager::getValue("lasm", "filament_limit", 5.0);
-    minBiasLimit  = ConfigManager::getValue("lasm", "min_bias_limit", 0.1);
-    maxBiasLimit  = ConfigManager::getValue("lasm", "max_bias_limit", 0.1);
-    radialMixing  = ConfigManager::getValue("lasm", "radial_mixing",  1.0);
-    lateralMixing = ConfigManager::getValue("lasm", "lateral_mixing", 1000.0);
-    restoreFactor = ConfigManager::getValue("lasm", "restore_factor", 0.001);
-    reshapeFactor = ConfigManager::getValue("lasm", "reshape_factor", 0.5);
+    maxFilament = ConfigManager::getValue("lasm", "max_filament", 5.0);
+    maxShapeBias  = ConfigManager::getValue("lasm", "max_shape_bias", 0.1);
+    radialMixWeight  = ConfigManager::getValue("lasm", "radial_mix_weight",  1.0);
+    lateralMixWeight = ConfigManager::getValue("lasm", "lateral_mix_weight", 1000.0);
+    mixCoef = ConfigManager::getValue("lasm", "mix_coef", 0.001);
+    reshapeCoef = ConfigManager::getValue("lasm", "reshape_coef", 0.5);
     connectScale  = ConfigManager::getValue("lasm", "connect_scale",  1.5);
     // Record domain and mesh.
     domain = &mesh.domain();
@@ -113,13 +112,13 @@ void AdvectionManager::
 output(const TimeLevelIndex<2> &timeIdx, int ncId) const {
     // Append global attributes.
     nc_redef(ncId);
-    nc_put_att(ncId, NC_GLOBAL, "filament_limit", NC_DOUBLE, 1, &filamentLimit);
-    nc_put_att(ncId, NC_GLOBAL, "min_bias_limit", NC_DOUBLE, 1, &minBiasLimit);
-    nc_put_att(ncId, NC_GLOBAL, "max_bias_limit", NC_DOUBLE, 1, &maxBiasLimit);
-    nc_put_att(ncId, NC_GLOBAL, "radial_mixing",  NC_DOUBLE, 1, &radialMixing);
-    nc_put_att(ncId, NC_GLOBAL, "lateral_mixing", NC_DOUBLE, 1, &lateralMixing);
-    nc_put_att(ncId, NC_GLOBAL, "restore_factor", NC_DOUBLE, 1, &restoreFactor);
-    nc_put_att(ncId, NC_GLOBAL, "reshape_factor", NC_DOUBLE, 1, &reshapeFactor);
+    nc_put_att(ncId, NC_GLOBAL, "max_filament", NC_DOUBLE, 1, &maxFilament);
+    nc_put_att(ncId, NC_GLOBAL, "max_shape_bias", NC_DOUBLE, 1, &maxShapeBias);
+    nc_put_att(ncId, NC_GLOBAL, "radial_mix_weight",  NC_DOUBLE, 1, &radialMixWeight);
+    nc_put_att(ncId, NC_GLOBAL, "lateral_mix_weight", NC_DOUBLE, 1, &lateralMixWeight);
+    nc_put_att(ncId, NC_GLOBAL, "mix_coef", NC_DOUBLE, 1, &mixCoef);
+    nc_put_att(ncId, NC_GLOBAL, "reshape_coef", NC_DOUBLE, 1, &reshapeCoef);
+    nc_put_att(ncId, NC_GLOBAL, "connect_scale", NC_DOUBLE, 1, &connectScale);
     string str = to_iso_extended_string(boost::gregorian::day_clock::universal_day());
     nc_put_att(ncId, NC_GLOBAL, "create_date", NC_CHAR, str.length(), str.c_str());
     nc_enddef(ncId);
@@ -348,16 +347,10 @@ mixParcels(const TimeLevelIndex<2> &timeIdx) {
             double bias0 = domain->calcDistance(x[i], X)/parcel->shapeSize(timeIdx).max();
             if (bias0 > bias) bias = bias0;
         }
-        // Set the bias limit based on the filament of the parcel and its volume
-        // compared with the reference volume.
-        double ratio = parcel->volume(timeIdx)/refVolume;
-        double biasLimit = transitionFunction(1, maxBiasLimit,
-                                              filamentLimit, minBiasLimit,
-                                              ratio*parcel->filament());
         // Check parcel bias.
         bool isDegenerated = true;
         // TODO: Redesign the thresholds.
-        if (bias < biasLimit && parcel->filament() < filamentLimit &&
+        if (bias < maxShapeBias && parcel->filament() < maxFilament &&
             !parcel->meshIndex(timeIdx).atBoundary(*mesh)) {
             isDegenerated = false;
 #ifndef LASM_MAX_MIX
@@ -392,7 +385,7 @@ mixParcels(const TimeLevelIndex<2> &timeIdx) {
             double n = norm(x1, 2);
             double d1 = n*cosTheta;
             double d2 = n*sinTheta;
-            weights[i] = radialMixing*d1*d1+lateralMixing*d2*d2;
+            weights[i] = radialMixWeight*d1*d1+lateralMixWeight*d2*d2;
         }
         weights /= max(weights);
         for (uword i = 0; i < numNeighborParcel; ++i) {
@@ -440,13 +433,13 @@ mixParcels(const TimeLevelIndex<2> &timeIdx) {
         // Restore tracer density to mean density.
         double newTotalMass[Tracers::numTracer()];
         for (int t = 0; t < Tracers::numTracer(); ++t) {
-            parcel->tracers().density(t) += restoreFactor*(weightedMeanDensity[t]-parcel->tracers().density(t));
+            parcel->tracers().density(t) += mixCoef*(weightedMeanDensity[t]-parcel->tracers().density(t));
             parcel->tracers().mass(t) = parcel->tracers().density(t)*parcel->volume(timeIdx);
             newTotalMass[t] = parcel->tracers().mass(t);
         }
         for (uword i = 0; i < numNeighborParcel; ++i) {
             if (weights[i] == 0) continue;
-            double c = restoreFactor*weights[i];
+            double c = mixCoef*weights[i];
             for (int t = 0; t < Tracers::numTracer(); ++t) {
                 neighborParcels[i]->tracers().density(t) += c*(weightedMeanDensity[t]-neighborParcels[i]->tracers().density(t));
                 neighborParcels[i]->tracers().mass(t) = neighborParcels[i]->tracers().density(t)*neighborParcels[i]->volume(timeIdx);
@@ -489,11 +482,14 @@ mixParcels(const TimeLevelIndex<2> &timeIdx) {
             S.fill(pow(parcel->detH(timeIdx), 1.0/domain->numDim()));
         } else {
             double filament = parcel->filament();
-            double factor = -1;
-            while (filament > filamentLimit || factor == -1) {
-                factor = transitionFunction(1, 0, filamentLimit, reshapeFactor,
-                                            filament);
-                double a = sqrt(factor+(1-factor)/filament);
+            double a = -1, c;
+            while (filament > maxFilament || a == -1) {
+                if (filament > maxFilament) {
+                    a = sqrt(reshapeCoef);
+                } else {
+                    c = (parcel->filament()-1)/(maxFilament-1);
+                    a = sqrt((1-c)+reshapeCoef*c);
+                }
                 if (domain->numDim() == 2) {
                     S[0] *= a;
                     S[1] /= a;
@@ -506,6 +502,10 @@ mixParcels(const TimeLevelIndex<2> &timeIdx) {
                     S[0] = S0*s;
                     S[1] = S1*s;
                     S[2] = S2*s;
+#ifndef NDEBUG
+                    assert(S[0] > S[1]);
+                    assert(S[1] > S[2]);
+#endif
                 }
                 filament = S[0]/S.min();
             }
