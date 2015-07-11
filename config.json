@@ -1,7 +1,7 @@
 {
     "common":
     {
-        "case_name": "barotropic"
+        "case_name": "terminator_chemistry"
     },
     "wrf_les":
     {
@@ -9,7 +9,7 @@
         "data_root": "/Users/dongli/lasm.build/data",
         "data_pattern": "wrf_les.40x40x40.%Y-%N-%D_%H:%M:%S.nc",
         "time_step_size_in_seconds": 30,
-        "output_pattern": "lasm.wrf_les.40x40x40.%5s.nc",
+        "output_pattern": "lasm.wrf_les.max_mix.40x40x40.%5s.nc",
         "output_frequency": "1 step",
         "velocity_stagger": true
     },
@@ -19,7 +19,7 @@
         "data_root": "/Users/dongli/barotropic-model.build",
         "data_pattern": "barotropic.%Y-%N-%D_%H:%M:%S.nc",
         "time_step_size_in_seconds": 1800,
-        "output_pattern": "lasm.barotropic.dt1800.240x121.%5s.nc",
+        "output_pattern": "lasm.barotropic.dt1800.mix_coef0.01.240x121.%5s.nc",
         "output_frequency": "1 hour",
         "velocity_stagger": false
     },
@@ -29,10 +29,12 @@
     },
     "deform":
     {
+        "output_pattern": "lasm.deform.case4.mix_coef0.1.240x121.%5s.nc",
         "output_frequency": "1 step"
     },
     "terminator_chemistry":
     {
+        "time_step_size_in_seconds": 1800,
         "output_pattern": "lasm.terminator_chemistry.tendency_on_mesh.360x181.%5s.nc",
         "output_frequency": "1 step"
     }

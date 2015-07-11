@@ -10,9 +10,7 @@ TerminatorChemistryTest::
 TerminatorChemistryTest() {
     subcase = "case4";
     period = 12*86400;
-    _stepSize = 1800;
     _startTime = ptime(date(2000, 1, 1));
-    _endTime = _startTime+geomtk::seconds(period);
     k1Center.init(2);
     k1Center.set(300*RAD, 20*RAD);
     REPORT_ONLINE;
@@ -34,7 +32,8 @@ init(AdvectionManager &advectionManager) {
     int numLat = ConfigManager::getValue("terminator_chemistry", "num_lat", 181);
     _mesh->init(numLon, numLat);
     // Initialize time manager.
-    _stepSize = ConfigManager::getValue("terminator_chemistry", "time_step_size_in_seconds", _stepSize);
+    _stepSize = ConfigManager::getValue("terminator_chemistry", "time_step_size_in_seconds", 1800);
+    _endTime = _startTime+geomtk::seconds(period);
     _timeManager.init(_startTime, _endTime, _stepSize);
     // Initialize IO manager.
     std::string caseName = "terminator_chemistry";

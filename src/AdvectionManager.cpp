@@ -86,6 +86,9 @@ addTracer(const string &name, const string &unit, const string &comment) {
 
 void AdvectionManager::
 advance(double dt, const TimeLevelIndex<2> &newIdx, const VelocityField &velocityField) {
+#ifdef LASM_TENDENCY_ON_MESH
+    remapTendencyFromGridsToParcels(newIdx-1);
+#endif
     integrate(dt, newIdx, velocityField);
     connectParcelsAndGrids(newIdx);
     remapDensityFromParcelsToGrids(newIdx);
@@ -105,6 +108,7 @@ input(const TimeLevelIndex<2> &timeIdx, double *q) {
         }
     }
     remapDensityFromGridsToParcels(timeIdx);
+    connectParcelsAndGrids(timeIdx);
     remapDensityFromParcelsToGrids(timeIdx);
 } // input
 
@@ -157,9 +161,6 @@ statistics(const TimeLevelIndex<2> &timeIdx) {
 void AdvectionManager::
 integrate(double dt, const TimeLevelIndex<2> &newIdx,
           const VelocityField &velocityField) {
-#ifdef LASM_TENDENCY_ON_MESH
-    remapTendencyFromGridsToParcels(newIdx);
-#endif
     TimeLevelIndex<2> oldIdx = newIdx-1;
     TimeLevelIndex<2> halfIdx = newIdx-0.5;
     double dt05 = 0.5*dt;
@@ -281,6 +282,19 @@ integrate(double dt, const TimeLevelIndex<2> &newIdx,
             Is1[i].locate(*mesh, xs1[i]);
         }
         parcel->updateDeformMatrix(newIdx);
+#ifdef LASM_TENDENCY_ON_MESH
+        // Disregard the tendencies causing negative densities on the parcel.
+        auto masses = parcel->tracers().masses();
+        for (uword t = 0; t < Tracers::numTracer(); ++t) {
+            masses[t] += parcel->tracers().tendency(t)*dt;
+        }
+        if (any(masses < 0)) {
+            for (uword t = 0; t < Tracers::numTracer(); ++t) {
+                Tracers::totalMass(t) += parcel->tracers().mass(t);
+            }
+            continue;
+        }
+#endif
         for (uword t = 0; t < Tracers::numTracer(); ++t) {
             parcel->tracers().mass(t) += parcel->tracers().tendency(t)*dt;
             parcel->tracers().density(t) = parcel->tracers().mass(t)/parcel->volume(newIdx);
@@ -353,7 +367,7 @@ mixParcels(const TimeLevelIndex<2> &timeIdx) {
         if (bias < maxShapeBias && parcel->filament() < maxFilament &&
             !parcel->meshIndex(timeIdx).atBoundary(*mesh)) {
             isDegenerated = false;
-#ifndef LASM_MAX_MIX
+#ifndef LASM_ALL_MIX
             continue;
 #endif
         }
@@ -399,7 +413,6 @@ mixParcels(const TimeLevelIndex<2> &timeIdx) {
             parcel->dump(timeIdx, meshAdaptor);
             cout << "Parcel " << parcel->id() << " failed to mix!" << endl;
             exit(-1);
-            continue;
         }
 #ifdef LASM_USE_DIAG
         Diagnostics::metric<Field<int> >("nmp")(parcel->hostCellIndex())++;
@@ -652,9 +665,13 @@ remapDensityFromGridsToParcels(const TimeLevelIndex<2> &timeIdx) {
 void AdvectionManager::
 remapTendencyFromGridsToParcels(const TimeLevelIndex<2> &timeIdx) {
     parcelManager.resetTendencies();
+    vector<int> voidCellIdxs;
     for (uword i = 0; i < gridCoords.n_cols; ++i) {
         int cellIdx = meshAdaptor.cellIndex(i);
-        assert(meshAdaptor.numConnectedParcel(cellIdx) != 0);
+        if (meshAdaptor.numConnectedParcel(cellIdx) == 0) {
+            voidCellIdxs.push_back(cellIdx);
+            continue;
+        }
         double totalWeight = 0;
         for (uword j = 0; j < meshAdaptor.numConnectedParcel(cellIdx); ++j) {
             totalWeight += meshAdaptor.remapWeight(cellIdx, j);
@@ -664,6 +681,58 @@ remapTendencyFromGridsToParcels(const TimeLevelIndex<2> &timeIdx) {
             double weight = meshAdaptor.remapWeight(cellIdx, parcel)/totalWeight;
             for (int t = 0; t < Tracers::numTracer(); ++t) {
                 parcel->tracers().tendency(t) += meshAdaptor.tendency(t, cellIdx)*weight;
+            }
+        }
+    }
+    // Fill void grids.
+    for (uword i = 0; i < voidCellIdxs.size(); ++i) {
+        int cellIdx = voidCellIdxs[i];
+        SearchType search(gridTree, NULL, gridCoords, meshAdaptor.coord(cellIdx).cartCoord(), true);
+        double searchRadius = mesh->cellSize(CENTER, cellIdx).max();
+        vector<vector<size_t> > neighbors;
+        vector<vector<double> > distances;
+        while (true) {
+            mlpack::math::Range r(0, searchRadius);
+            search.Search(r, neighbors, distances);
+            if (neighbors[0].size() != 0) {
+                vector<int> neighborCellIdxs;
+                for (uword j = 0; j < neighbors[0].size(); ++j) {
+                    int neighborCellIdx = meshAdaptor.cellIndex(neighbors[0][j]);
+                    // check if the cell is not a void one
+                    if (find(voidCellIdxs.begin(), voidCellIdxs.end(),
+                             neighborCellIdx) != voidCellIdxs.end() ||
+                        meshAdaptor.numConnectedParcel(neighborCellIdx) == 0) continue;
+                    neighborCellIdxs.push_back(neighborCellIdx);
+                }
+                if (neighborCellIdxs.size() == 0) {
+                    searchRadius *= 2;
+                    continue;
+                }
+                vector<double> weights;
+                double totalWeight = 0;
+                for (uword i = 0; i < neighborCellIdxs.size(); ++i) {
+                    for (uword j = 0; j < meshAdaptor.numConnectedParcel(neighborCellIdxs[i]); ++j) {
+                        Parcel *parcel = meshAdaptor.connectedParcels(neighborCellIdxs[i])[j];
+                        double d = domain->calcDistance(meshAdaptor.coord(cellIdx),
+                                                        parcel->x(timeIdx));
+                        weights.push_back(1/d);
+                        totalWeight += weights.back();
+                    }
+                }
+                int k = 0;
+                for (uword i = 0; i < neighborCellIdxs.size(); ++i) {
+                    for (uword j = 0; j < meshAdaptor.numConnectedParcel(neighborCellIdxs[i]); ++j) {
+                        Parcel *parcel = meshAdaptor.connectedParcels(neighborCellIdxs[i])[j];
+                        for (uword t = 0; t < Tracers::numTracer(); ++t) {
+                            parcel->tracers().tendency(t) += meshAdaptor.tendency(t, cellIdx)*weights[k]/totalWeight;
+                        }
+                        k++;
+                    }
+                }
+                break;
+            } else {
+                // Increase the search radius and search again.
+                searchRadius *= 2;
             }
         }
     }

@@ -3,7 +3,7 @@
 
 #define LASM_TENDENCY_ON_PARCEL
 #define LASM_IN_CARTESIAN
-//#define LASM_MAX_MIX
+//#define LASM_ALL_MIX
 //#define LASM_IN_SPHERE
 //#define LASM_USE_RLL_MESH
 #define LASM_USE_DIAG
