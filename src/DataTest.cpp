@@ -62,7 +62,7 @@ init(AdvectionManager &advectionManager) {
     io.file(outputIdx).addField("double", FULL_DIMENSION, {&velocityField.divergence()});
 #ifdef LASM_USE_DIAG
     // Initialize diagnostics.
-    Diagnostics::init(*_mesh, io);
+    Diagnostics::init(*_mesh, io, caseName);
     Diagnostics::addMetric<Field<int> >("nmp", "1", "mixed parcel number");
     Diagnostics::addMetric<Field<int> >("ncp1", "1", "contained parcel number");
     Diagnostics::addMetric<Field<int> >("ncp2", "1", "connected parcel number");

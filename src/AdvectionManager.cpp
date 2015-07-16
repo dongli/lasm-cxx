@@ -363,9 +363,10 @@ mixParcels(const TimeLevelIndex<2> &timeIdx) {
         }
         // Check parcel bias.
         bool isDegenerated = true;
+        bool hasNegativeVolume = det(parcel->H(timeIdx)) < 0;
         // TODO: Redesign the thresholds.
         if (bias < maxShapeBias && parcel->filament() < maxFilament &&
-            !parcel->meshIndex(timeIdx).atBoundary(*mesh)) {
+            !parcel->meshIndex(timeIdx).atBoundary(*mesh) && !hasNegativeVolume) {
             isDegenerated = false;
 #ifndef LASM_ALL_MIX
             continue;
@@ -491,6 +492,12 @@ mixParcels(const TimeLevelIndex<2> &timeIdx) {
         // Change problematic parcel shape (make parcel more uniform).
         if (!isDegenerated) continue;
         auto S = parcel->S();
+        mat U, V;
+        if (hasNegativeVolume) {
+            if (!svd(U, S, V, parcel->H(timeIdx-1))) {
+                REPORT_ERROR("Failed to do SVD on a matrix!");
+            }
+        }
         if (parcel->meshIndex(timeIdx).atBoundary(*mesh)) {
             S.fill(pow(parcel->detH(timeIdx), 1.0/domain->numDim()));
         } else {
@@ -523,7 +530,11 @@ mixParcels(const TimeLevelIndex<2> &timeIdx) {
                 filament = S[0]/S.min();
             }
         }
-        parcel->updateDeformMatrix(timeIdx, S);
+        if (hasNegativeVolume) {
+            parcel->updateDeformMatrix(timeIdx, U, S, V);
+        } else {
+            parcel->updateDeformMatrix(timeIdx, S);
+        }
         parcel->resetSkeletonPoints(timeIdx, *mesh);
     }
 } // mixParcels
